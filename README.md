@@ -1,8 +1,6 @@
 
 
-📖 Sobre o Projeto
-
-O Gêmeo Digital Solar é uma aplicação de simulação em tempo real desenvolvida em Python para modelar o desempenho de uma planta solar fotovoltaica. A ferramenta permite a análise da posição solar, dos níveis de irradiância e do comportamento elétrico de um arranjo fotovoltaico, servindo como uma plataforma para estudos de caso, análises de desempenho e pesquisa acadêmica.
+📖 O Gêmeo Digital Solar é uma aplicação de simulação em tempo real desenvolvida em Python para modelar o desempenho de uma planta solar fotovoltaica. A ferramenta permite a análise da posição solar, dos níveis de irradiância e do comportamento elétrico de um arranjo fotovoltaico, servindo como uma plataforma para estudos de caso, análises de desempenho e pesquisa acadêmica.
 
 ✨ Funcionalidades Principais
 
