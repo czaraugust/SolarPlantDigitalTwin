@@ -4,8 +4,8 @@ import math
 import numpy as np
 from datetime import datetime, timedelta
 
-from solar_calculator import CalculadoraSolar
-from ui_components import EntradaGlobalFrame
+from core.solar_calculator import CalculadoraSolar
+from gui.components.ui_components import EntradaGlobalFrame
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg

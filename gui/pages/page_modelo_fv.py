@@ -2,9 +2,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import traceback
 
-from pv_module_model import PVSystemModel
+from core.pv_module_model import PVSystemModel
 # <-- Importa os componentes
-from ui_components import EntradaGlobalFrame, IrradianceFrame
+from gui.components.ui_components import EntradaGlobalFrame, IrradianceFrame
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
