@@ -2,9 +2,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import datetime
 
-import irradiance_calculator as irr_calc
+import core.irradiance_calculator as irr_calc
 # <-- Importa o novo componente
-from ui_components import EntradaGlobalFrame, IrradianceFrame
+from gui.components.ui_components import EntradaGlobalFrame, IrradianceFrame
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg

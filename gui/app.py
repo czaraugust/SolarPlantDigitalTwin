@@ -4,12 +4,12 @@ import datetime
 import traceback
 
 # Importa as classes dos CÁLCULOS
-from solar_calculator import CalculadoraSolar
+from core.solar_calculator import CalculadoraSolar
 
 # Importa as classes das PÁGINAS DA INTERFACE
-from page_seguidor import PaginaGrafico
-from page_irradiancia import PaginaPainel
-from page_modelo_fv import PaginaPlantaSolar
+from gui.pages.page_seguidor import PaginaGrafico
+from gui.pages.page_irradiancia import PaginaPainel
+from gui.pages.page_modelo_fv import PaginaPlantaSolar
 
 
 class SolarApp(tk.Tk):
