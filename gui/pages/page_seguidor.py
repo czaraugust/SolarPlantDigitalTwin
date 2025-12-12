@@ -42,6 +42,8 @@ class PaginaGrafico(ttk.Frame):
         self._criar_widgets()
         self.controller.editar_data_var.trace_add(
             "write", self._toggle_edit_state)
+        self.controller.editar_local_var.trace_add(  # <-- NOVA TRACE
+            "write", self._toggle_edit_state)
         self.controller.editar_hora_var.trace_add(
             "write", self._toggle_edit_state)
         self._toggle_edit_state()
@@ -128,15 +130,20 @@ class PaginaGrafico(ttk.Frame):
             (por_sol_dt - nascer_sol_dt).total_seconds() / 60 / 15) + 1)] if por_sol_dt > nascer_sol_dt else []
 
         caminho_azimute, caminho_elevacao = [], []
+        caminho_azimute_pvlib, caminho_elevacao_pvlib = [], []
+
         for tempo in intervalo:
+            # Modelo Simples (Original)
             temp_solar = CalculadoraSolar(
                 tempo, solar_atual.latitude, solar_atual.longitude, solar_atual.utc)
             if temp_solar.elevacao >= 0:
                 caminho_azimute.append(math.radians(temp_solar.azimute))
                 caminho_elevacao.append(temp_solar.elevacao)
 
+        # Plot Modelo Simples (Original)
         self.ax_polar.plot(caminho_azimute, caminho_elevacao,
-                           label="Trajetória do Sol", color="sandybrown")
+                           label="Trajetória do Sol", color="sandybrown", linestyle='-')
+        
         if solar_atual.elevacao >= 0:
             self.ax_polar.plot(math.radians(solar_atual.azimute), solar_atual.elevacao,
                                'o', markersize=8, color="darkorange", label="Posição Atual")

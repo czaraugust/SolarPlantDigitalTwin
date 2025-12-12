@@ -284,10 +284,17 @@ class PaginaPlantaSolar(ttk.Frame):
 
             self.ax_iv.clear()
             self.ax_pv.clear()
+            # Extract STC MPP
+            v_mp_stc, i_mp_stc, p_mp_stc = stc_results['mpp']
+
             self.ax_iv.plot(stc_results['v_curve'],
-                            stc_results['i_curve'], label="Curva STC")
+                            stc_results['i_curve'], label="Curva STC", color='tab:blue')
             self.ax_pv.plot(
-                stc_results['v_curve'], stc_results['p_curve'] / 1000, label="Curva STC")
+                stc_results['v_curve'], stc_results['p_curve'] / 1000, label="Curva STC", color='tab:blue')
+
+            # Marker no MPP STC
+            self.ax_iv.plot(v_mp_stc, i_mp_stc, 'o', color='tab:blue', markersize=5)
+            self.ax_pv.plot(v_mp_stc, p_mp_stc/1000, 'o', color='tab:blue', markersize=5)
 
             irr_ideal = float(
                 self.controller.pagina_painel.saidas_irradiancia['POA_ideal_global'].get())
@@ -298,7 +305,7 @@ class PaginaPlantaSolar(ttk.Frame):
 
             scenarios = {'ideal': irr_ideal,
                          'fixo': irr_fixo, 'horiz': irr_horiz}
-            colors = {'ideal': 'red', 'fixo': 'orange', 'horiz': 'blue'}
+            colors = {'ideal': 'red', 'fixo': 'orange', 'horiz': 'green'}
 
             for prefix, irr_value in scenarios.items():
                 if irr_value > 0:
@@ -311,10 +318,15 @@ class PaginaPlantaSolar(ttk.Frame):
                     self.mpp_outputs[f"{prefix}_i"].set(f"{i_mp:.2f}")
                     self.mpp_outputs[f"{prefix}_p"].set(f"{p_mp/1000:.2f}")
 
-                    self.ax_iv.plot(
-                        v_mp, i_mp, 'o', color=colors[prefix], markersize=8, label=f"MPP {prefix.capitalize()}")
-                    self.ax_pv.plot(
-                        v_mp, p_mp/1000, 'o', color=colors[prefix], markersize=8, label=f"MPP {prefix.capitalize()}")
+                    # Plot Curvas
+                    self.ax_iv.plot(results['v_curve'], results['i_curve'],
+                                    color=colors[prefix], label=f"Curva {prefix.capitalize()}")
+                    self.ax_pv.plot(results['v_curve'], results['p_curve'] / 1000,
+                                    color=colors[prefix], label=f"Curva {prefix.capitalize()}")
+
+                    # Marker no MPP
+                    self.ax_iv.plot(v_mp, i_mp, 'o', color=colors[prefix], markersize=5)
+                    self.ax_pv.plot(v_mp, p_mp/1000, 'o', color=colors[prefix], markersize=5)
                 else:
                     for key_suffix in ['irr', 'v', 'i', 'p']:
                         self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00")

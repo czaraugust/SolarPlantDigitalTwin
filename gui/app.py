@@ -38,6 +38,7 @@ class SolarApp(tk.Tk):
         self.irradiance_slider_var = tk.DoubleVar()  # <-- NOVA VARIÁVEL GLOBAL
 
         self.editar_data_var = tk.BooleanVar(value=False)
+        self.editar_local_var = tk.BooleanVar(value=False)  # <-- NOVA VARIÁVEL
         self.editar_hora_var = tk.BooleanVar(value=False)
         self.editar_irradiancia_var = tk.BooleanVar(value=False)
         self.editar_painel_var = tk.BooleanVar(value=False)
@@ -53,9 +54,9 @@ class SolarApp(tk.Tk):
         self.pagina_planta_solar = PaginaPlantaSolar(self.notebook, self)
 
         # Adiciona as páginas como abas
-        self.notebook.add(self.pagina_grafico, text="Seguidor Solar")
-        self.notebook.add(self.pagina_painel, text="Análise de Irradiância")
-        self.notebook.add(self.pagina_planta_solar, text="Modelo do Módulo FV")
+        self.notebook.add(self.pagina_grafico, text="Posição Solar")
+        self.notebook.add(self.pagina_painel, text="Irradiância")
+        self.notebook.add(self.pagina_planta_solar, text="Geração de Energia")
 
         self._atualizar_em_tempo_real()
 

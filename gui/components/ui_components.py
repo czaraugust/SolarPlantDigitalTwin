@@ -103,14 +103,15 @@ class EntradaGlobalFrame(ttk.LabelFrame):
         style.configure("Compact.TLabel", font=('TkDefaultFont', 6))
         style.configure("Compact.TCheckbutton", font=('TkDefaultFont', 6))
 
-        cb_data = ttk.Checkbutton(
-            self, text="Editar Data e Local", variable=self.controller.editar_data_var, style="Compact.TCheckbutton")
-        cb_data.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 2))
+        # --- LOCAL ---
+        cb_local = ttk.Checkbutton(
+            self, text="Editar Local", variable=self.controller.editar_local_var, style="Compact.TCheckbutton")
+        cb_local.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 2))
 
-        entradas_loc_ano = {
-            "latitude": "Latitude (°):", "longitude": "Longitude (°):", "utc": "UTC (h):", "ano": "Ano:"}
+        entradas_loc = {
+            "latitude": "Latitude (°):", "longitude": "Longitude (°):", "utc": "UTC (h):"}
         row_idx = 1
-        for key, label in entradas_loc_ano.items():
+        for key, label in entradas_loc.items():
             ttk.Label(self, text=label, style="Compact.TLabel").grid(
                 row=row_idx, column=0, sticky="w", pady=1)
             variable = self.controller.entradas_globais.get(key)
@@ -119,13 +120,29 @@ class EntradaGlobalFrame(ttk.LabelFrame):
             entry.grid(row=row_idx, column=1, columnspan=2,
                        sticky="ew", padx=5, pady=1)
             self.entrada_widgets[key] = entry
-            if key == 'ano':
-                variable.trace_add("write", self._update_day_slider_range)
-                entry.bind("<KeyRelease>", self._sync_day_slider_from_entries)
-            else:
-                entry.bind(
-                    "<KeyRelease>", lambda e: self.controller.atualizar_calculos_e_telas())
+            entry.bind(
+                "<KeyRelease>", lambda e: self.controller.atualizar_calculos_e_telas())
             row_idx += 1
+
+        # --- DATA ---
+        cb_data = ttk.Checkbutton(
+            self, text="Editar Data", variable=self.controller.editar_data_var, style="Compact.TCheckbutton")
+        cb_data.grid(row=row_idx, column=0, columnspan=3, sticky="w", pady=(5, 2))
+        row_idx += 1
+
+        # Ano (separado do loop anterior)
+        ttk.Label(self, text="Ano:", style="Compact.TLabel").grid(row=row_idx, column=0, sticky="w", pady=1)
+        entry_ano = ttk.Entry(self, textvariable=self.controller.entradas_globais["ano"], font=('TkDefaultFont', 6))
+        entry_ano.grid(row=row_idx, column=1, columnspan=2, sticky="ew", padx=5, pady=1)
+        self.entrada_widgets["ano"] = entry_ano
+        
+        # Como o Ano influencia o slider de dias, precisamos rastreá-lo
+        try:
+             self.controller.entradas_globais["ano"].trace_add("write", self._update_day_slider_range)
+        except tk.TclError:
+             pass 
+        entry_ano.bind("<KeyRelease>", self._sync_day_slider_from_entries)
+        row_idx += 1
 
         dm_frame = ttk.Frame(self)
         dm_frame.grid(row=row_idx, column=0, columnspan=3, sticky="ew", pady=1)
@@ -212,10 +229,19 @@ class EntradaGlobalFrame(ttk.LabelFrame):
             self.controller.time_slider_var, 1, 0, 1439, event))
 
     def _toggle_edit_state(self):
+        # Controle de Local
+        state_local = "normal" if self.controller.editar_local_var.get() else "disabled"
+        for key in ("latitude", "longitude", "utc"):
+            if key in self.entrada_widgets:
+                self.entrada_widgets[key].config(state=state_local)
+
+        # Controle de Data
         state_data = "normal" if self.controller.editar_data_var.get() else "disabled"
-        for key in ("latitude", "longitude", "utc", "ano", "dia", "mes", "day_of_year_slider"):
+        for key in ("ano", "dia", "mes", "day_of_year_slider"):
             if key in self.entrada_widgets:
                 self.entrada_widgets[key].config(state=state_data)
+
+        # Controle de Hora
         state_hora = "normal" if self.controller.editar_hora_var.get() else "disabled"
         for key in ("hora", "minuto", "segundo", "time_slider"):
             if key in self.entrada_widgets:
