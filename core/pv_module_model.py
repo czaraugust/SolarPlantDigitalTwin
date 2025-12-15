@@ -49,6 +49,14 @@ class PVSystemModel:
         Calcula as curvas I-V, P-V e o ponto de máxima potência (MPP) para o 
         sistema completo sob as condições operacionais fornecidas.
         """
+        # Evita RuntimeWarnings (overflow/invalid value) em situações de muito baixa irradiância (noite)
+        if poa_global < 1.0:
+            return {
+                'v_curve': np.zeros(200),
+                'i_curve': np.zeros(200),
+                'p_curve': np.zeros(200),
+                'mpp': (0.0, 0.0, 0.0)
+            }
         # 1. Calcular a temperatura da célula
         temp_cell = pvlib.temperature.faiman(
             poa_global=poa_global,

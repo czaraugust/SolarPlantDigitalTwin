@@ -10,6 +10,7 @@ from core.solar_calculator import CalculadoraSolar
 from gui.pages.page_seguidor import PaginaGrafico
 from gui.pages.page_irradiancia import PaginaPainel
 from gui.pages.page_modelo_fv import PaginaPlantaSolar
+from gui.pages.page_potencia import PaginaPotencia
 
 
 class SolarApp(tk.Tk):
@@ -52,11 +53,13 @@ class SolarApp(tk.Tk):
         self.pagina_grafico = PaginaGrafico(self.notebook, self)
         self.pagina_painel = PaginaPainel(self.notebook, self)
         self.pagina_planta_solar = PaginaPlantaSolar(self.notebook, self)
+        self.pagina_potencia = PaginaPotencia(self.notebook, self)
 
         # Adiciona as páginas como abas
         self.notebook.add(self.pagina_grafico, text="Posição Solar")
         self.notebook.add(self.pagina_painel, text="Irradiância")
-        self.notebook.add(self.pagina_planta_solar, text="Geração de Energia")
+        self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
+        self.notebook.add(self.pagina_potencia, text="Potência")
 
         self._atualizar_em_tempo_real()
 
@@ -114,6 +117,7 @@ class SolarApp(tk.Tk):
             self.pagina_grafico.atualizar_interface()
             self.pagina_painel.calcular_e_atualizar_tabela()
             self.pagina_planta_solar.atualizar_modelo_pv()
+            self.pagina_potencia.atualizar_modelo_pv()
 
         except (ValueError, AttributeError, tk.TclError):
             pass  # Ignora erros de digitação temporários
