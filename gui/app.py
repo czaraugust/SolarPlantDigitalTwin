@@ -4,20 +4,27 @@ import datetime
 import traceback
 
 # Importa as classes dos CÁLCULOS
+# Importa as classes dos CÁLCULOS
 from core.solar_calculator import CalculadoraSolar
+from core.csv_player import CsvPlayer  # <-- Importação do Player
 
 # Importa as classes das PÁGINAS DA INTERFACE
 from gui.pages.page_seguidor import PaginaGrafico
 from gui.pages.page_irradiancia import PaginaPainel
 from gui.pages.page_modelo_fv import PaginaPlantaSolar
 from gui.pages.page_potencia import PaginaPotencia
+from gui.pages.page_meteorologia import PaginaMeteorologia
+
+# --- CONFIGURAÇÃO DE SIMULAÇÃO ---
+USA_DADOS_CSV = True  # Altere para True para usar dados do CSV
+CAMINHO_ARQUIVO_CSV = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
 
 
 class SolarApp(tk.Tk):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title("Gêmeo Digital Solar")
-        self.geometry("1280x800")
+        self.geometry("1300x850") # Ajuste leve para caber melhor os novos gráficos
 
         # --- DADOS E VARIÁVEIS CENTRALIZADOS ---
         self.solar_object = None
@@ -54,12 +61,27 @@ class SolarApp(tk.Tk):
         self.pagina_painel = PaginaPainel(self.notebook, self)
         self.pagina_planta_solar = PaginaPlantaSolar(self.notebook, self)
         self.pagina_potencia = PaginaPotencia(self.notebook, self)
+        self.pagina_meteorologia = PaginaMeteorologia(self.notebook, self)
 
-        # Adiciona as páginas como abas
+        # Adiciona as páginas como abas (Meteorologia é a segunda)
         self.notebook.add(self.pagina_grafico, text="Posição Solar")
+        self.notebook.add(self.pagina_meteorologia, text="Meteorologia") # <--- AQUI
         self.notebook.add(self.pagina_painel, text="Irradiância")
         self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
         self.notebook.add(self.pagina_potencia, text="Potência")
+
+        # --- INTEGRAÇÃO COM CSV ---
+        self.csv_player = None
+        if USA_DADOS_CSV:
+            try:
+                self.csv_player = CsvPlayer(self)
+                if self.csv_player.load_csv(CAMINHO_ARQUIVO_CSV):
+                    print("CSV carregado. A reprodução iniciará em 15 segundos...")
+                    self.after(15000, lambda: [print("Iniciando reprodução do CSV agora."), self.csv_player.start()])
+                else:
+                    print("Falha ao carregar CSV. Verifique o caminho.")
+            except Exception as e:
+                print(f"Erro ao iniciar Player CSV: {e}")
 
         self._atualizar_em_tempo_real()
 
@@ -118,6 +140,7 @@ class SolarApp(tk.Tk):
             self.pagina_painel.calcular_e_atualizar_tabela()
             self.pagina_planta_solar.atualizar_modelo_pv()
             self.pagina_potencia.atualizar_modelo_pv()
+            self.pagina_meteorologia.atualizar_meteorologia()
 
         except (ValueError, AttributeError, tk.TclError):
             pass  # Ignora erros de digitação temporários

@@ -233,7 +233,7 @@ class PaginaPlantaSolar(ttk.Frame):
         self.canvas_pv.get_tk_widget().pack(fill="both", expand=True)
 
         mpp_frame = ttk.LabelFrame(
-            right_col, text="Pontos de Máxima Potência (MPP) - Tempo Real", padding=10)
+            right_col, text="Parâmetros Elétricos - Tempo Real", padding=10)
         mpp_frame.pack(fill="x", pady=10)
 
         headers = [

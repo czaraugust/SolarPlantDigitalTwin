@@ -44,9 +44,9 @@ class PaginaPotencia(ttk.Frame):
         self.array_vars = {'modules_per_string': tk.StringVar(
             value="10"), 'strings_in_parallel': tk.StringVar(value="5")}
         
-        self.mpp_outputs = {'ideal_v': tk.StringVar(), 'ideal_i': tk.StringVar(), 'ideal_p': tk.StringVar(), 'ideal_irr': tk.StringVar(),
-                            'fixo_v': tk.StringVar(), 'fixo_i': tk.StringVar(), 'fixo_p': tk.StringVar(), 'fixo_irr': tk.StringVar(),
-                            'horiz_v': tk.StringVar(), 'horiz_i': tk.StringVar(), 'horiz_p': tk.StringVar(), 'horiz_irr': tk.StringVar()}
+        self.mpp_outputs = {'ideal_v': tk.StringVar(), 'ideal_i': tk.StringVar(), 'ideal_p': tk.StringVar(), 'ideal_irr': tk.StringVar(), 'ideal_gain': tk.StringVar(),
+                            'fixo_v': tk.StringVar(), 'fixo_i': tk.StringVar(), 'fixo_p': tk.StringVar(), 'fixo_irr': tk.StringVar(), 'fixo_gain': tk.StringVar(),
+                            'horiz_v': tk.StringVar(), 'horiz_i': tk.StringVar(), 'horiz_p': tk.StringVar(), 'horiz_irr': tk.StringVar(), 'horiz_gain': tk.StringVar()}
 
         self._criar_widgets()
         self.controller.editar_data_var.trace_add(
@@ -238,6 +238,25 @@ class PaginaPotencia(ttk.Frame):
         self.canvas_power = FigureCanvasTkAgg(self.fig_power, master=graph_frame)
         self.canvas_power.get_tk_widget().pack(fill="both", expand=True)
 
+        mpp_frame = ttk.LabelFrame(
+            right_col, text="Parâmetros Elétricos - Tempo Real", padding=10)
+        mpp_frame.pack(fill="x", pady=10)
+
+        headers = [
+            "Cenário", "Irradiância (W/m²)", "Tensão (V)", "Corrente (A)", "Potência (kW)", "Ganho/Perda (%)"]
+        for col, text in enumerate(headers):
+            ttk.Label(mpp_frame, text=text, font=('TkDefaultFont', 6, 'bold')).grid(
+                row=0, column=col, padx=5, sticky="w")
+
+        rows = [("Painel Ideal", "ideal"), ("Painel Fixo", "fixo"),
+                ("Painel Horizontal", "horiz")]
+        for row, (label, prefix) in enumerate(rows, start=1):
+            ttk.Label(mpp_frame, text=label).grid(
+                row=row, column=0, sticky="w")
+            for col, key_suffix in enumerate(['irr', 'v', 'i', 'p', 'gain'], start=1):
+                ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_{key_suffix}"], state="readonly", width=15).grid(
+                    row=row, column=col, padx=5)
+
     def atualizar_modelo_pv(self):
         try:
             datasheet = {}
@@ -282,14 +301,38 @@ class PaginaPotencia(ttk.Frame):
             
             p_values = {}
 
+            p_ideal = 0.0
+            if scenarios['ideal'] > 0:
+                 # Calculate ideal first to be base
+                results_ideal = pv_system.calculate_curves_and_mpp(
+                        scenarios['ideal'], ambient['temp_air'], ambient['wind_speed'])
+                _, _, p_ideal_val = results_ideal['mpp']
+                p_ideal = p_ideal_val
+
             for prefix, irr_value in scenarios.items():
                 if irr_value > 0:
                     results = pv_system.calculate_curves_and_mpp(
                         irr_value, ambient['temp_air'], ambient['wind_speed'])
-                    _, _, p_mp = results['mpp']
+                    v_mp, i_mp, p_mp = results['mpp']
                     p_values[prefix] = p_mp / 1000 # kW
+
+                    self.mpp_outputs[f"{prefix}_irr"].set(f"{irr_value:.2f}")
+                    self.mpp_outputs[f"{prefix}_v"].set(f"{v_mp:.2f}")
+                    self.mpp_outputs[f"{prefix}_i"].set(f"{i_mp:.2f}")
+                    self.mpp_outputs[f"{prefix}_p"].set(f"{p_mp/1000:.2f}")
+
+                    # Gain calculation
+                    if p_ideal > 0:
+                        gain_val = ((p_mp - p_ideal) / p_ideal) * 100
+                        self.mpp_outputs[f"{prefix}_gain"].set(f"{gain_val:+.2f}%")
+                    else:
+                        self.mpp_outputs[f"{prefix}_gain"].set("0.00%")
                 else:
                     p_values[prefix] = 0.0
+                    for key_suffix in ['irr', 'v', 'i', 'p', 'gain']:
+                        self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00")
+                        if key_suffix == 'gain':
+                             self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00%")
             
             # Adiciona ao histórico se houver timestamp disponível no controller (pegamos do solar_object)
             solar = self.controller.solar_object
