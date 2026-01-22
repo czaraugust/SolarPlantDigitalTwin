@@ -178,7 +178,7 @@ class PaginaMeteorologia(ttk.Frame):
         frame_wind_dir = ttk.LabelFrame(right_graphs, text="Direção do Vento (º)")
         frame_wind_dir.grid(row=1, column=1, sticky="nsew", padx=2, pady=2)
         self.fig_wind_dir = Figure(dpi=80)
-        self.ax_wind_dir = self.fig_wind_dir.add_subplot(111, projection='polar')
+        self.ax_wind_dir = self.fig_wind_dir.add_subplot(111)
         self.canvas_wind_dir = FigureCanvasTkAgg(self.fig_wind_dir, master=frame_wind_dir)
         self.canvas_wind_dir.get_tk_widget().pack(fill="both", expand=True)
 
@@ -195,9 +195,16 @@ class PaginaMeteorologia(ttk.Frame):
             self.meteo_vars[key].set(f"{val_float:.1f}")
 
     def _reset_graphs(self):
-        if messagebox.askyesno("Reiniciar Gráficos", "Tem certeza que deseja limpar todo o histórico dos gráficos?"):
-            self.trail_data = {k: [] for k in self.trail_data}
-            self.atualizar_meteorologia()
+        self.reset_history(confirm=True)
+
+    def reset_history(self, confirm=True):
+        if confirm:
+            if not messagebox.askyesno("Reiniciar Gráficos", "Tem certeza que deseja limpar todo o histórico dos gráficos?"):
+                return
+        
+        
+        self.trail_data = {k: [] for k in self.trail_data}
+        self._plot_graphs()
 
     def atualizar_meteorologia(self):
         try:
@@ -248,76 +255,71 @@ class PaginaMeteorologia(ttk.Frame):
         self.last_plot_time = current_time
 
         timestamps = self.trail_data['timestamps']
-        if not timestamps:
-            return
+        # Remove early return to allow clearing graphs
             
         # FORMATADOR DE DATA
         fmt = mdates.DateFormatter('%H:%M:%S')
 
         # 1. Temperaturas
         self.ax_temp.clear()
-        self.ax_temp.plot(timestamps, self.trail_data['temp_painel'], label='Painel', color='red')
-        self.ax_temp.plot(timestamps, self.trail_data['temp_amb'], label='Ambiente', color='blue')
-        self.ax_temp.legend(loc='upper left')
+        if timestamps:
+            self.ax_temp.plot(timestamps, self.trail_data['temp_painel'], label='Painel', color='red')
+            self.ax_temp.plot(timestamps, self.trail_data['temp_amb'], label='Ambiente', color='blue')
+            self.ax_temp.legend(loc='upper left')
+            self.ax_temp.xaxis.set_major_formatter(fmt)
+            self.fig_temp.autofmt_xdate()
         self.ax_temp.grid(True, linestyle='--', alpha=0.7)
         self.ax_temp.set_title("Temperatura (°C)")
-        self.ax_temp.xaxis.set_major_formatter(fmt)
-        self.fig_temp.autofmt_xdate()
         self.canvas_temp.draw()
 
         # 2. Umidade
         self.ax_hum.clear()
-        self.ax_hum.plot(timestamps, self.trail_data['umidade'], color='blue')
+        if timestamps:
+            self.ax_hum.plot(timestamps, self.trail_data['umidade'], color='blue')
+            self.ax_hum.xaxis.set_major_formatter(fmt)
         self.ax_hum.set_ylim(0, 100)
         self.ax_hum.grid(True)
         # self.ax_hum.set_title("Umidade (%)") # Title no frame já diz
-        self.ax_hum.xaxis.set_major_formatter(fmt)
         self.ax_hum.tick_params(axis='x', rotation=30, labelsize=8)
         self.canvas_hum.draw()
 
         # 3. Vento Vel
         self.ax_wind_spd.clear()
-        self.ax_wind_spd.plot(timestamps, self.trail_data['vento_vel'], color='green')
+        if timestamps:
+            self.ax_wind_spd.plot(timestamps, self.trail_data['vento_vel'], color='green')
+            self.ax_wind_spd.xaxis.set_major_formatter(fmt)
         self.ax_wind_spd.grid(True)
-        self.ax_wind_spd.xaxis.set_major_formatter(fmt)
         self.ax_wind_spd.tick_params(axis='x', rotation=30, labelsize=8)
         self.canvas_wind_spd.draw()
 
         # 4. Chuva
         self.ax_rain.clear()
         # Chuva geralmente é acumulada ou barra. Vamos de linha preenchida
-        self.ax_rain.fill_between(timestamps, self.trail_data['chuva'], color='blue', alpha=0.3)
-        self.ax_rain.plot(timestamps, self.trail_data['chuva'], color='blue')
+        if timestamps:
+            self.ax_rain.fill_between(timestamps, self.trail_data['chuva'], color='blue', alpha=0.3)
+            self.ax_rain.plot(timestamps, self.trail_data['chuva'], color='blue')
+            self.ax_rain.xaxis.set_major_formatter(fmt)
         self.ax_rain.grid(True)
-        self.ax_rain.xaxis.set_major_formatter(fmt)
         self.ax_rain.tick_params(axis='x', rotation=30, labelsize=8)
         self.canvas_rain.draw()
 
-        # 5. Vento Dir (Polar)
+        # 5. Vento Dir (Linear)
         self.ax_wind_dir.clear()
-        self.ax_wind_dir.set_theta_zero_location('N')
-        self.ax_wind_dir.set_theta_direction(-1) # Clockwise
-        
-        # Desenha uma "agulha" ou seta com o valor ATUAL
-        curr_dir_deg = self.trail_data['vento_dir'][-1]
-        curr_dir_rad = np.radians(curr_dir_deg)
-        
-        # Barra simples indicando direção
-        self.ax_wind_dir.bar(curr_dir_rad, 1.0, width=0.2, bottom=0.0, color='purple', alpha=0.5)
-        # Seta (Invertida: Aponta para o centro, indicando "Vento DE")
-        self.ax_wind_dir.annotate('', xy=(0, 0), xytext=(curr_dir_rad, 1.0),
-                                  arrowprops=dict(arrowstyle='->', color='purple', lw=2))
-        
-        self.ax_wind_dir.set_yticks([]) # Remove raios de magnitude concêntricos
+        if timestamps:
+            self.ax_wind_dir.plot(timestamps, self.trail_data['vento_dir'], color='purple')
+            self.ax_wind_dir.xaxis.set_major_formatter(fmt)
+            
+            # Atual
+            if self.trail_data['vento_dir']:
+                curr_dir_deg = self.trail_data['vento_dir'][-1]
+                self.ax_wind_dir.set_title(f"Direção: {int(curr_dir_deg)}°", fontsize=10)
 
-        # Mapeamento de direções
-        cardinal_dirs = {
-            0: "Norte", 45: "Nordeste", 90: "Leste", 135: "Sudeste",
-            180: "Sul", 225: "Sudoeste", 270: "Oeste", 315: "Noroeste"
-        }
-        # Tenta pegar exato ou o mais próximo se houver flutuação (embora o slider trave em 45)
-        closest_deg = min(cardinal_dirs.keys(), key=lambda x: abs(x - curr_dir_deg))
-        dir_text = cardinal_dirs.get(closest_deg, "")
-
-        self.ax_wind_dir.set_title(f"{int(curr_dir_deg)}° - {dir_text}", y=1.08)
+        self.ax_wind_dir.grid(True)
+        self.ax_wind_dir.tick_params(axis='x', rotation=30, labelsize=8)
+        
+        # Configurar eixo Y para 0-360 graus com cardeais
+        self.ax_wind_dir.set_ylim(0, 360)
+        self.ax_wind_dir.set_yticks([0, 45, 90, 135, 180, 225, 270, 315])
+        self.ax_wind_dir.set_yticklabels(['0', '45', '90', '135', '180', '225', '270', '315'], fontsize=8)
+        
         self.canvas_wind_dir.draw()

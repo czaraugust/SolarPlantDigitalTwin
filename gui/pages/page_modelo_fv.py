@@ -20,27 +20,22 @@ class PaginaPlantaSolar(ttk.Frame):
         self.cached_static_inputs = {}
 
         self.editar_datasheet_var = tk.BooleanVar(value=False)
-        self.editar_ambientais_var = tk.BooleanVar(value=False)
+        # self.editar_ambientais_var = tk.BooleanVar(value=False) # Removido local
         self.editar_usina_var = tk.BooleanVar(value=False)
 
         self.datasheet_widgets = []
         self.ambient_widgets = []
         self.usina_widgets = []
 
-        self.datasheet_vars = {
-            'v_oc': tk.StringVar(value="49.8"), 'i_sc': tk.StringVar(value="10.46"),
-            'v_mp': tk.StringVar(value="41.7"), 'i_mp': tk.StringVar(value="9.98"),
-            'alpha_sc': tk.StringVar(value="0.00523"), 'beta_voc': tk.StringVar(value="-0.15438"),
-            'gamma_pmp': tk.StringVar(value="-0.38"), 'cells_in_series': tk.StringVar(value="72"),
-            'cell_type': tk.StringVar(value='monoSi')
-        }
-        self.ambient_vars = {'temp_air': tk.StringVar(
-            value="25.0"), 'wind_speed': tk.StringVar(value="1.0")}
-        self.array_vars = {'modules_per_string': tk.StringVar(
-            value="10"), 'strings_in_parallel': tk.StringVar(value="5")}
+        self.usina_widgets = []
+
+        self.datasheet_vars = self.controller.dados_datasheet
+        self.ambient_vars = self.controller.dados_ambientais
+        self.array_vars = self.controller.dados_usina
         self.mpp_outputs = {'ideal_v': tk.StringVar(), 'ideal_i': tk.StringVar(), 'ideal_p': tk.StringVar(), 'ideal_irr': tk.StringVar(), 'ideal_gain': tk.StringVar(),
                             'fixo_v': tk.StringVar(), 'fixo_i': tk.StringVar(), 'fixo_p': tk.StringVar(), 'fixo_irr': tk.StringVar(), 'fixo_gain': tk.StringVar(),
-                            'horiz_v': tk.StringVar(), 'horiz_i': tk.StringVar(), 'horiz_p': tk.StringVar(), 'horiz_irr': tk.StringVar(), 'horiz_gain': tk.StringVar()}
+                            'horiz_v': tk.StringVar(), 'horiz_i': tk.StringVar(), 'horiz_p': tk.StringVar(), 'horiz_irr': tk.StringVar(), 'horiz_gain': tk.StringVar(),
+                            'real_v': tk.StringVar(), 'real_i': tk.StringVar(), 'real_p': tk.StringVar(), 'real_irr': tk.StringVar(), 'real_gain': tk.StringVar()}
 
         self._criar_widgets()
         self.controller.editar_data_var.trace_add(
@@ -49,7 +44,7 @@ class PaginaPlantaSolar(ttk.Frame):
             "write", self._toggle_edit_state)
         self.editar_datasheet_var.trace_add(
             "write", self._toggle_datasheet_edit_state)
-        self.editar_ambientais_var.trace_add(
+        self.controller.editar_ambientais_var.trace_add(
             "write", self._toggle_ambient_edit_state)
         self.editar_usina_var.trace_add("write", self._toggle_usina_edit_state)
         self._toggle_datasheet_edit_state()
@@ -73,7 +68,7 @@ class PaginaPlantaSolar(ttk.Frame):
                 widget.config(state=text_state)
 
     def _toggle_ambient_edit_state(self, *args):
-        state = "normal" if self.editar_ambientais_var.get() else "disabled"
+        state = "normal" if self.controller.editar_ambientais_var.get() else "disabled"
         for widget in self.ambient_widgets:
             widget.config(state=state)
 
@@ -91,7 +86,7 @@ class PaginaPlantaSolar(ttk.Frame):
         self.controller.atualizar_calculos_e_telas()
 
     def _handle_ambient_arrow_key(self, variable_key, step, from_val, to_val, event):
-        if self.editar_ambientais_var.get():
+        if self.controller.editar_ambientais_var.get():
             current_value = float(self.ambient_vars[variable_key].get())
             new_value = current_value + step
             new_value = max(from_val, min(to_val, new_value))
@@ -156,7 +151,7 @@ class PaginaPlantaSolar(ttk.Frame):
         env_frame.columnconfigure(1, weight=1)
 
         cb_ambient = ttk.Checkbutton(env_frame, text="Editar Ambiente",
-                                     variable=self.editar_ambientais_var, style="Compact.TCheckbutton")
+                                     variable=self.controller.editar_ambientais_var, style="Compact.TCheckbutton")
         cb_ambient.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 3))
 
         ttk.Label(env_frame, text="Temp. Ambiente [°C]:", style="Compact.TLabel").grid(
@@ -237,15 +232,16 @@ class PaginaPlantaSolar(ttk.Frame):
         mpp_frame.pack(fill="x", pady=10)
 
         headers = [
-            "Cenário", "Irradiância (W/m²)", "Tensão (V)", "Corrente (A)", "Potência (kW)", "Ganho/Perda (%)"]
+            "Cenário", "Irradiância (W/m²)", "Tensão (V)", "Corrente (A)", "Potência (W)", "Ganho/Perda (%)"]
         for col, text in enumerate(headers):
             ttk.Label(mpp_frame, text=text, font=('TkDefaultFont', 6, 'bold')).grid(
                 row=0, column=col, padx=5, sticky="w")
 
         rows = [("Painel Ideal", "ideal"), ("Painel Fixo", "fixo"),
-                ("Painel Horizontal", "horiz")]
+                ("Painel Horizontal", "horiz"), ("Painel Real", "real")]
         for row, (label, prefix) in enumerate(rows, start=1):
-            ttk.Label(mpp_frame, text=label).grid(
+            lbl_style = "TkDefaultFont" if prefix != "real" else ("TkDefaultFont", 9, "bold")
+            ttk.Label(mpp_frame, text=label, font=lbl_style).grid(
                 row=row, column=0, sticky="w")
             for col, key_suffix in enumerate(['irr', 'v', 'i', 'p', 'gain'], start=1):
                 ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_{key_suffix}"], state="readonly", width=15).grid(
@@ -291,11 +287,11 @@ class PaginaPlantaSolar(ttk.Frame):
             self.ax_iv.plot(stc_results['v_curve'],
                             stc_results['i_curve'], label="Curva STC", color='tab:blue')
             self.ax_pv.plot(
-                stc_results['v_curve'], stc_results['p_curve'] / 1000, label="Curva STC", color='tab:blue')
+                stc_results['v_curve'], stc_results['p_curve'], label="Curva STC", color='tab:blue')
 
             # Marker no MPP STC
             self.ax_iv.plot(v_mp_stc, i_mp_stc, 'o', color='tab:blue', markersize=5)
-            self.ax_pv.plot(v_mp_stc, p_mp_stc/1000, 'o', color='tab:blue', markersize=5)
+            self.ax_pv.plot(v_mp_stc, p_mp_stc, 'o', color='tab:blue', markersize=5)
 
             irr_ideal = float(
                 self.controller.pagina_painel.saidas_irradiancia['POA_ideal_global'].get())
@@ -325,7 +321,7 @@ class PaginaPlantaSolar(ttk.Frame):
                     self.mpp_outputs[f"{prefix}_irr"].set(f"{irr_value:.2f}")
                     self.mpp_outputs[f"{prefix}_v"].set(f"{v_mp:.2f}")
                     self.mpp_outputs[f"{prefix}_i"].set(f"{i_mp:.2f}")
-                    self.mpp_outputs[f"{prefix}_p"].set(f"{p_mp/1000:.2f}")
+                    self.mpp_outputs[f"{prefix}_p"].set(f"{p_mp:.2f}")
 
                     # Gain calculation
                     if p_ideal > 0:
@@ -337,17 +333,41 @@ class PaginaPlantaSolar(ttk.Frame):
                     # Plot Curvas
                     self.ax_iv.plot(results['v_curve'], results['i_curve'],
                                     color=colors[prefix], label=f"Curva {prefix.capitalize()}")
-                    self.ax_pv.plot(results['v_curve'], results['p_curve'] / 1000,
+                    self.ax_pv.plot(results['v_curve'], results['p_curve'],
                                     color=colors[prefix], label=f"Curva {prefix.capitalize()}")
 
                     # Marker no MPP
                     self.ax_iv.plot(v_mp, i_mp, 'o', color=colors[prefix], markersize=5)
-                    self.ax_pv.plot(v_mp, p_mp/1000, 'o', color=colors[prefix], markersize=5)
+                    self.ax_pv.plot(v_mp, p_mp, 'o', color=colors[prefix], markersize=5)
                 else:
                     for key_suffix in ['irr', 'v', 'i', 'p', 'gain']:
                         self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00")
                         if key_suffix == 'gain':
                              self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00%")
+
+            # --- DADOS REAIS ---
+            v_real = float(self.controller.dados_painel['tensao_real'].get() or 0)
+            i_real = float(self.controller.dados_painel['corrente_real'].get() or 0)
+            p_real = (v_real * i_real)
+            
+            # Irradiância Real (pode ser GHI global ou fixa, dependendo do sensor, aqui vamos assumir GHI global como ref ou vazia)
+            # Na verdade o CSV tem 'Irradiance'. Vamos usar GHI Global mesmo para referência.
+            irr_real = irr_horiz # Assume GHI como ref visual
+            
+            self.mpp_outputs['real_v'].set(f"{v_real:.2f}")
+            self.mpp_outputs['real_i'].set(f"{i_real:.2f}")
+            self.mpp_outputs['real_p'].set(f"{p_real:.2f}")
+            self.mpp_outputs['real_irr'].set(f"{irr_real:.2f}")
+            
+            if p_ideal > 0:
+                gain_real = ((p_real - p_ideal) / p_ideal) * 100
+                self.mpp_outputs['real_gain'].set(f"{gain_real:+.2f}%")
+            else:
+                 self.mpp_outputs['real_gain'].set("0.00%")
+
+            # Plot Ponto Real (Preto)
+            self.ax_iv.plot(v_real, i_real, 'o', color='black', markersize=6, label="Real", zorder=5)
+            self.ax_pv.plot(v_real, p_real, 'o', color='black', markersize=6, label="Real", zorder=5)
 
             self.ax_iv.set_title("Curva Corrente x Tensão")
             self.ax_iv.set_xlabel("Tensão (V)")
@@ -359,7 +379,7 @@ class PaginaPlantaSolar(ttk.Frame):
 
             self.ax_pv.set_title("Curva Potência x Tensão")
             self.ax_pv.set_xlabel("Tensão (V)")
-            self.ax_pv.set_ylabel("Potência (kW)")
+            self.ax_pv.set_ylabel("Potência (W)")
             self.ax_pv.grid(True)
             self.ax_pv.legend()
             self.fig_pv.tight_layout()

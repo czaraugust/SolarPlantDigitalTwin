@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import traceback
 import matplotlib.dates as mdates
+import math
 
 from core.pv_module_model import PVSystemModel
 # <-- Importa os componentes
@@ -11,7 +12,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
-class PaginaPotencia(ttk.Frame):
+class PaginaPrevisao(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
@@ -22,30 +23,49 @@ class PaginaPotencia(ttk.Frame):
         
         # Armazena os dados do traço (histórico)
         self.trail_data = {'timestamps': [],
-                           'horizontal': [], 'ideal': [], 'fixo': [], 'real': []}
+                           'fixo': [], 'meteo': [], 'real': []}
+        
+        # Dados para calculo de erros acumulados
+        self.error_stats = {
+            'fixo': {
+                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
+                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+            },
+            'meteo': {
+                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
+                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+            },
+            'real': {
+                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
+                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+            } 
+        }
 
         self.editar_datasheet_var = tk.BooleanVar(value=False)
-        # self.editar_ambientais_var usa a do controller agora se quisermos sincronizar o estado de edição tbm? 
-        # O usuario disse campos. Vamos manter a variavel de controle de edição local por enquanto, 
-        # mas os valores (StringVar) centralizados.
-        # Mas para garantir sync total, melhor usar variaveis do controller se possivel.
-        # No app.py eu adicionei editar_ambientais_var.
         self.editar_usina_var = tk.BooleanVar(value=False)
 
         self.datasheet_widgets = []
         self.ambient_widgets = []
         self.usina_widgets = []
 
-        self.usina_widgets = []
-
         self.datasheet_vars = self.controller.dados_datasheet
         self.ambient_vars = self.controller.dados_ambientais
         self.array_vars = self.controller.dados_usina
         
-        self.mpp_outputs = {'ideal_v': tk.StringVar(), 'ideal_i': tk.StringVar(), 'ideal_p': tk.StringVar(), 'ideal_irr': tk.StringVar(), 'ideal_gain': tk.StringVar(),
-                            'fixo_v': tk.StringVar(), 'fixo_i': tk.StringVar(), 'fixo_p': tk.StringVar(), 'fixo_irr': tk.StringVar(), 'fixo_gain': tk.StringVar(),
-                            'horiz_v': tk.StringVar(), 'horiz_i': tk.StringVar(), 'horiz_p': tk.StringVar(), 'horiz_irr': tk.StringVar(), 'horiz_gain': tk.StringVar(),
-                            'real_v': tk.StringVar(), 'real_i': tk.StringVar(), 'real_p': tk.StringVar(), 'real_irr': tk.StringVar(), 'real_gain': tk.StringVar()}
+        # Outputs da tabela de comparação
+        self.mpp_outputs = {
+            'fixo_p': tk.StringVar(), 
+            'fixo_mse': tk.StringVar(), 'fixo_mae': tk.StringVar(), 
+            'fixo_mape': tk.StringVar(), 'fixo_rmse': tk.StringVar(),
+            
+            'meteo_p': tk.StringVar(), 
+            'meteo_mse': tk.StringVar(), 'meteo_mae': tk.StringVar(), 
+            'meteo_mape': tk.StringVar(), 'meteo_rmse': tk.StringVar(),
+            
+            'real_p': tk.StringVar(), 
+            'real_mse': tk.StringVar(), 'real_mae': tk.StringVar(), 
+            'real_mape': tk.StringVar(), 'real_rmse': tk.StringVar()
+        }
 
         self._criar_widgets()
         self.controller.editar_data_var.trace_add(
@@ -108,12 +128,20 @@ class PaginaPotencia(ttk.Frame):
 
     def reset_history(self, confirm=True):
         if confirm:
-            if not messagebox.askyesno("Confirmar Reinicialização", "Você tem certeza que deseja reiniciar o gráfico de potência?"):
+            if not messagebox.askyesno("Confirmar Reinicialização", "Você tem certeza que deseja reiniciar o gráfico de previsão e zerar todos os erros (MSE, MAE, etc)?"):
                 return
 
         self.trail_data = {'timestamps': [],
-                           'horizontal': [], 'ideal': [], 'fixo': [], 'real': []}
-        self._atualizar_grafico_potencia()
+                           'fixo': [], 'meteo': [], 'real': []}
+        
+        # Reset de todas as estatísticas de erro
+        for k in self.error_stats:
+            self.error_stats[k] = {
+                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
+                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+            }
+        
+        self._atualizar_grafico_previsao()
 
     def _criar_widgets(self):
         main_frame = ttk.Frame(self)
@@ -168,11 +196,11 @@ class PaginaPotencia(ttk.Frame):
             self.datasheet_widgets.append(widget)
 
         env_frame = ttk.LabelFrame(
-            left_col, text="Condições Ambientais", padding=5)
+            left_col, text="Condições Ambientais (Entrada Manual / Fixo)", padding=5)
         env_frame.pack(fill="x", pady=3)
         env_frame.columnconfigure(1, weight=1)
 
-        cb_ambient = ttk.Checkbutton(env_frame, text="Editar Ambiente",
+        cb_ambient = ttk.Checkbutton(env_frame, text="Editar Ambiente (Modelo Fixo)",
                                      variable=self.controller.editar_ambientais_var, style="Compact.TCheckbutton")
         cb_ambient.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 3))
 
@@ -226,14 +254,14 @@ class PaginaPotencia(ttk.Frame):
             
         # Botão limpar gráfico
         btn_limpar = ttk.Button(
-            left_col, text="Reiniciar Gráfico", command=self._clear_and_restart_trail)
+            left_col, text="Reiniciar Previsão", command=self._clear_and_restart_trail)
         btn_limpar.pack(pady=10, fill="x")
 
         right_col = ttk.Frame(main_frame)
         right_col.pack(side="left", fill="both", expand=True, padx=10)
         
         graph_frame = ttk.LabelFrame(
-            right_col, text="Potência Gerada x Tempo", padding=10)
+            right_col, text="Potência Gerada x Tempo (Comparativo)", padding=10)
         graph_frame.pack(fill="both", expand=True, pady=10)
         
         self.fig_power = Figure(dpi=100)
@@ -242,26 +270,46 @@ class PaginaPotencia(ttk.Frame):
         self.canvas_power.get_tk_widget().pack(fill="both", expand=True)
 
         mpp_frame = ttk.LabelFrame(
-            right_col, text="Parâmetros Elétricos - Tempo Real", padding=10)
+            right_col, text="Comparação Modelo Manual vs Real vs Meteo", padding=10)
         mpp_frame.pack(fill="x", pady=10)
 
+        # Atualizando Headers para novas colunas
         headers = [
-            "Cenário", "Irradiância (W/m²)", "Tensão (V)", "Corrente (A)", "Potência (W)", "Ganho/Perda (%)"]
+            "Cenário", "Potência (W)", "MSE (W²)", "MAE (W)", "MAPE (%)", "RMSE (W)"]
+        
         for col, text in enumerate(headers):
             ttk.Label(mpp_frame, text=text, font=('TkDefaultFont', 6, 'bold')).grid(
-                row=0, column=col, padx=5, sticky="w")
+                row=0, column=col, padx=4, sticky="w")
 
-        rows = [("Painel Ideal", "ideal"), ("Painel Fixo", "fixo"),
-                ("Painel Horizontal", "horiz"), ("Painel Real", "real")]
+        # Ordem solicitada: Real, Fixo (MODELO), Meteo (NOVO)
+        rows = [("REAL", "real"), ("MODELO (MANUAL)", "fixo"), ("MODELO (METEO)", "meteo")]
+        
         for row, (label, prefix) in enumerate(rows, start=1):
             lbl_style = "TkDefaultFont" if prefix != "real" else ("TkDefaultFont", 9, "bold")
             ttk.Label(mpp_frame, text=label, font=lbl_style).grid(
                 row=row, column=0, sticky="w")
-            for col, key_suffix in enumerate(['irr', 'v', 'i', 'p', 'gain'], start=1):
-                ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_{key_suffix}"], state="readonly", width=15).grid(
-                    row=row, column=col, padx=5)
+            
+            # Potencia
+            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_p"], state="readonly", width=10).grid(
+                    row=row, column=1, padx=2)
+            
+            # MSE
+            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_mse"], state="readonly", width=10).grid(
+                    row=row, column=2, padx=2)
+            
+            # MAE
+            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_mae"], state="readonly", width=10).grid(
+                    row=row, column=3, padx=2)
+            
+            # MAPE
+            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_mape"], state="readonly", width=10).grid(
+                    row=row, column=4, padx=2)
+            
+            # RMSE
+            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_rmse"], state="readonly", width=10).grid(
+                    row=row, column=5, padx=2)
 
-    def atualizar_modelo_pv(self):
+    def atualizar_previsao(self):
         try:
             datasheet = {}
             for key, var in self.datasheet_vars.items():
@@ -271,134 +319,157 @@ class PaginaPotencia(ttk.Frame):
                     datasheet[key] = float(var.get())
             datasheet['cells_in_series'] = int(datasheet['cells_in_series'])
 
-            ambient = {k: float(v.get()) for k, v in self.ambient_vars.items()}
-            array_config = {k: int(v.get())
-                            for k, v in self.array_vars.items()}
-
+            # Config do Array
+            array_config = {k: int(v.get()) for k, v in self.array_vars.items()}
             current_static_inputs = {**datasheet, **array_config}
             
-            # Reutiliza lógica de cache, embora aqui seja menos crítico para o gráfico histórico
-            # pois sempre recalculamos o ponto atual para adicionar ao histórico.
-            # No entanto, a criação do objeto PVSystemModel é pesada, então mantemos o cache.
-
+            # Cache do Sistema PV
             pv_system = self.cached_pv_system
-            
             if current_static_inputs != self.cached_static_inputs:
                 pv_system = PVSystemModel(
                     datasheet, array_config['modules_per_string'], array_config['strings_in_parallel'])
-                
                 self.cached_pv_system = pv_system
                 self.cached_static_inputs = current_static_inputs
 
             if not pv_system:
                 return
 
-            irr_ideal = float(
-                self.controller.pagina_painel.saidas_irradiancia['POA_ideal_global'].get())
+            # Dados Ambientais 1: Manual/Fixo (Sliders)
+            ambient_fixed = {k: float(v.get()) for k, v in self.ambient_vars.items()}
+
+            # Dados Ambientais 2: Meteo Real (CSV/Aba Metereologia)
+            ambient_meteo = {
+                'temp_air': 25.0, 'wind_speed': 1.0 # Default
+            }
+            if hasattr(self.controller, 'pagina_meteorologia'):
+                pm = self.controller.pagina_meteorologia
+                if hasattr(pm, 'meteo_vars'):
+                     # Conversão de unidades se necessario. O modelo espera C e m/s.
+                     # O slider de vento está em km/h? Verificando slider do page_meteorologia: "Velocidade do Vento" ... 0-80 km/h
+                     # O modelo pvlib espera WIND SPEED [m/s].
+                     # PRECISARÁ CONVERTER km/h -> m/s se o valor vier de la.
+                     
+                     t_amb_str = pm.meteo_vars['temp_amb'].get()
+                     v_vel_str = pm.meteo_vars['vento_vel'].get() # km/h
+                     
+                     if t_amb_str: ambient_meteo['temp_air'] = float(t_amb_str)
+                     if v_vel_str: ambient_meteo['wind_speed'] = float(v_vel_str) / 3.6 # km/h -> m/s
+
             irr_fixo = float(
                 self.controller.pagina_painel.saidas_irradiancia['POA_fixo_global'].get())
-            irr_horiz = float(
-                self.controller.pagina_painel.saidas_irradiancia['GHI_global'].get())
 
-            scenarios = {'ideal': irr_ideal,
-                         'fixo': irr_fixo, 'horiz': irr_horiz}
+            # Cenários de Cálculo
+            # 1. Fixo (Sliders)
+            # 2. Meteo (Real-Time Temp/Wind)
+            scenarios = {}
             
-            p_values = {}
+            # --- CÁLCULO FIXO ---
+            if irr_fixo > 0:
+                res_fixo = pv_system.calculate_curves_and_mpp(
+                    irr_fixo, ambient_fixed['temp_air'], ambient_fixed['wind_speed'])
+                scenarios['fixo'] = res_fixo['mpp'][2] # Power
+            else:
+                scenarios['fixo'] = 0.0
 
-            p_ideal = 0.0
-            if scenarios['ideal'] > 0:
-                 # Calculate ideal first to be base
-                results_ideal = pv_system.calculate_curves_and_mpp(
-                        scenarios['ideal'], ambient['temp_air'], ambient['wind_speed'])
-                _, _, p_ideal_val = results_ideal['mpp']
-                p_ideal = p_ideal_val
+            # --- CÁLCULO METEO ---
+            if irr_fixo > 0:
+                res_meteo = pv_system.calculate_curves_and_mpp(
+                    irr_fixo, ambient_meteo['temp_air'], ambient_meteo['wind_speed'])
+                scenarios['meteo'] = res_meteo['mpp'][2] # Power
+            else:
+                scenarios['meteo'] = 0.0
 
-            for prefix, irr_value in scenarios.items():
-                if irr_value > 0:
-                    results = pv_system.calculate_curves_and_mpp(
-                        irr_value, ambient['temp_air'], ambient['wind_speed'])
-                    v_mp, i_mp, p_mp = results['mpp']
-                    p_values[prefix] = p_mp # W
 
-                    self.mpp_outputs[f"{prefix}_irr"].set(f"{irr_value:.2f}")
-                    self.mpp_outputs[f"{prefix}_v"].set(f"{v_mp:.2f}")
-                    self.mpp_outputs[f"{prefix}_i"].set(f"{i_mp:.2f}")
-                    self.mpp_outputs[f"{prefix}_p"].set(f"{p_mp:.2f}")
-
-                    # Gain calculation
-                    if p_ideal > 0:
-                        gain_val = ((p_mp - p_ideal) / p_ideal) * 100
-                        self.mpp_outputs[f"{prefix}_gain"].set(f"{gain_val:+.2f}%")
-                    else:
-                        self.mpp_outputs[f"{prefix}_gain"].set("0.00%")
-                else:
-                    p_values[prefix] = 0.0
-                    for key_suffix in ['irr', 'v', 'i', 'p', 'gain']:
-                        self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00")
-
-            
-            # --- DADOS REAIS ---
+            # --- DADOS REAIS (REFERÊNCIA) ---
             v_real = float(self.controller.dados_painel['tensao_real'].get() or 0)
             i_real = float(self.controller.dados_painel['corrente_real'].get() or 0)
             p_real = (v_real * i_real) # W
             
-            # Irradiância Real (Reference)
-            irr_real = irr_horiz
-            
-            self.mpp_outputs['real_v'].set(f"{v_real:.2f}")
-            self.mpp_outputs['real_i'].set(f"{i_real:.2f}")
             self.mpp_outputs['real_p'].set(f"{p_real:.2f}")
-            self.mpp_outputs['real_irr'].set(f"{irr_real:.2f}")
+            self.mpp_outputs['real_mse'].set("REF")
+            self.mpp_outputs['real_mae'].set("REF")
+            self.mpp_outputs['real_mape'].set("REF")
+            self.mpp_outputs['real_rmse'].set("REF")
+
+            # Update UI & Stats
+            for prefix in ['fixo', 'meteo']:
+                p_w = scenarios[prefix]
+                self.mpp_outputs[f"{prefix}_p"].set(f"{p_w:.2f}")
+
+                # --- CÁLCULO DE ERROS ---
+                diff = p_w - p_real
+                abs_diff = abs(diff)
+                sq_diff = diff ** 2
+                
+                # Atualiza somatórios
+                self.error_stats[prefix]['sum_sq_err'] += sq_diff
+                self.error_stats[prefix]['sum_abs_err'] += abs_diff
+                self.error_stats[prefix]['count'] += 1
+                
+                count = self.error_stats[prefix]['count']
+                
+                # MSE
+                mse = self.error_stats[prefix]['sum_sq_err'] / count if count > 0 else 0
+                self.mpp_outputs[f"{prefix}_mse"].set(f"{mse:.2f}")
+                
+                # RMSE
+                rmse = math.sqrt(mse)
+                self.mpp_outputs[f"{prefix}_rmse"].set(f"{rmse:.2f}")
+                
+                # MAE
+                mae = self.error_stats[prefix]['sum_abs_err'] / count if count > 0 else 0
+                self.mpp_outputs[f"{prefix}_mae"].set(f"{mae:.2f}")
+                
+                # MAPE (Evitar divisão por zero)
+                if p_real != 0:
+                    abs_perc = (abs_diff / p_real)
+                    self.error_stats[prefix]['sum_abs_perc'] += abs_perc
+                    self.error_stats[prefix]['count_mape'] += 1
+                
+                count_mape = self.error_stats[prefix]['count_mape']
+                mape = (self.error_stats[prefix]['sum_abs_perc'] / count_mape * 100) if count_mape > 0 else 0.0
+                self.mpp_outputs[f"{prefix}_mape"].set(f"{mape:.2f}%")
             
-            if p_ideal > 0:
-                gain_real = ((p_real - p_ideal) / p_ideal) * 100
-                self.mpp_outputs['real_gain'].set(f"{gain_real:+.2f}%")
-            else:
-                 self.mpp_outputs['real_gain'].set("0.00%")
             
-            # Adiciona ao histórico se houver timestamp disponível no controller (pegamos do solar_object)
+            # Adiciona ao histórico se houver timestamp disponível no controller
             solar = self.controller.solar_object
             if solar:
                 self.trail_data['timestamps'].append(solar.data_hora)
-                self.trail_data['ideal'].append(p_values['ideal'])
-                self.trail_data['fixo'].append(p_values['fixo'])
-                self.trail_data['horizontal'].append(p_values['horiz'])
+                self.trail_data['fixo'].append(scenarios['fixo'])
+                self.trail_data['meteo'].append(scenarios['meteo'])
                 self.trail_data['real'].append(p_real)
                 
-            self._atualizar_grafico_potencia()
+            self._atualizar_grafico_previsao()
 
         except Exception:
             traceback.print_exc()
 
-    def _atualizar_grafico_potencia(self):
+    def _atualizar_grafico_previsao(self):
         self.ax_power.clear()
         if self.trail_data['timestamps']:
-            self.ax_power.plot(
-                self.trail_data['timestamps'], self.trail_data['horizontal'], label="Painel Horizontal", color='blue', zorder=2)
-            self.ax_power.plot(
-                self.trail_data['timestamps'], self.trail_data['ideal'], label="Painel Ideal", color='red', zorder=2)
-            self.ax_power.plot(
-                self.trail_data['timestamps'], self.trail_data['fixo'], label="Painel Fixo", color='orange', zorder=2)
-            self.ax_power.plot(
-                self.trail_data['timestamps'], self.trail_data['real'], label="Painel Real", color='black', zorder=3, linewidth=2)
+            ts = self.trail_data['timestamps']
+            
+            # Modelo Fixo (Blue)
+            self.ax_power.plot(ts, self.trail_data['fixo'], label="MODELO (MANUAL)", color='blue', zorder=2)
+            
+            # Modelo Meteo (Green)
+            self.ax_power.plot(ts, self.trail_data['meteo'], label="MODELO (METEO)", color='green', linestyle='--', zorder=3)
+            
+            # Real (Black)
+            self.ax_power.plot(ts, self.trail_data['real'], label="REAL", color='black', alpha=0.8, linewidth=2, zorder=1)
 
-            last_ts = self.trail_data['timestamps'][-1]
-            self.ax_power.plot(
-                last_ts, self.trail_data['horizontal'][-1], 'o', color='mediumblue', markersize=8, zorder=4)
-            self.ax_power.plot(
-                last_ts, self.trail_data['ideal'][-1], 'o', color='darkred', markersize=8, zorder=4)
-            self.ax_power.plot(
-                last_ts, self.trail_data['fixo'][-1], 'o', color='darkorange', markersize=8, zorder=4)
-            self.ax_power.plot(
-                last_ts, self.trail_data['real'][-1], 'o', color='black', markersize=8, zorder=5)
+            # Dots no final
+            last_ts = ts[-1]
+            self.ax_power.plot(last_ts, self.trail_data['fixo'][-1], 'o', color='mediumblue', markersize=6)
+            self.ax_power.plot(last_ts, self.trail_data['meteo'][-1], 'o', color='darkgreen', markersize=6)
+            self.ax_power.plot(last_ts, self.trail_data['real'][-1], 'o', color='black', markersize=6)
 
-        self.ax_power.set_title("Potência Gerada (W)")
+        self.ax_power.set_title("Comparação: Manual vs Meteo Real vs Saída Real")
         self.ax_power.set_xlabel("Hora")
         self.ax_power.set_ylabel("Potência (W)")
         if self.trail_data['timestamps']:
             self.ax_power.legend()
-        self.ax_power.grid(
-            True, which='both', linestyle='--', linewidth=0.5)
+        self.ax_power.grid(True, which='both', linestyle='--', linewidth=0.5)
 
         if self.trail_data['timestamps']:
             self.ax_power.xaxis.set_major_formatter(

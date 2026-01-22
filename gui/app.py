@@ -14,6 +14,8 @@ from gui.pages.page_irradiancia import PaginaPainel
 from gui.pages.page_modelo_fv import PaginaPlantaSolar
 from gui.pages.page_potencia import PaginaPotencia
 from gui.pages.page_meteorologia import PaginaMeteorologia
+from gui.pages.page_previsao import PaginaPrevisao
+from gui.pages.page_conversao import PaginaConversao # <--- Import Nova Aba
 
 # --- CONFIGURAÇÃO DE SIMULAÇÃO ---
 USA_DADOS_CSV = True  # Altere para True para usar dados do CSV
@@ -32,7 +34,24 @@ class SolarApp(tk.Tk):
             "painel_inclinacao": tk.StringVar(value="10.0"),
             "painel_azimute": tk.StringVar(value="0.0"),
             "irradiancia_ghi": tk.StringVar(value="850"),
-            "albedo": tk.StringVar(value="0.2")
+            "albedo": tk.StringVar(value="0.2"),
+            "tensao_real": tk.StringVar(value="0.0"),   # <--- NOVO
+            "corrente_real": tk.StringVar(value="0.0")  # <--- NOVO
+        }
+        self.dados_usina = {
+            'modules_per_string': tk.StringVar(value="10"),
+            'strings_in_parallel': tk.StringVar(value="1")
+        }
+        self.dados_ambientais = {
+            'temp_air': tk.StringVar(value="25.0"),
+            'wind_speed': tk.StringVar(value="1.0")
+        }
+        self.dados_datasheet = {
+            'v_oc': tk.StringVar(value="39.4"), 'i_sc': tk.StringVar(value="9.09"),
+            'v_mp': tk.StringVar(value="31.7"), 'i_mp': tk.StringVar(value="8.52"),
+            'alpha_sc': tk.StringVar(value="0.00523"), 'beta_voc': tk.StringVar(value="-0.15438"),
+            'gamma_pmp': tk.StringVar(value="-0.38"), 'cells_in_series': tk.StringVar(value="60"),
+            'cell_type': tk.StringVar(value='polySi')
         }
         self.entradas_globais = {
             "latitude": tk.StringVar(value="-9.55762188835476"),
@@ -50,6 +69,7 @@ class SolarApp(tk.Tk):
         self.editar_hora_var = tk.BooleanVar(value=False)
         self.editar_irradiancia_var = tk.BooleanVar(value=False)
         self.editar_painel_var = tk.BooleanVar(value=False)
+        self.editar_ambientais_var = tk.BooleanVar(value=False)
 
         # --- MONTAGEM DA INTERFACE ---
         self.notebook = ttk.Notebook(self)
@@ -61,14 +81,18 @@ class SolarApp(tk.Tk):
         self.pagina_painel = PaginaPainel(self.notebook, self)
         self.pagina_planta_solar = PaginaPlantaSolar(self.notebook, self)
         self.pagina_potencia = PaginaPotencia(self.notebook, self)
+        self.pagina_previsao = PaginaPrevisao(self.notebook, self) # Nova aba
+        self.pagina_conversao = PaginaConversao(self.notebook, self) # Nova aba Conversão
         self.pagina_meteorologia = PaginaMeteorologia(self.notebook, self)
 
         # Adiciona as páginas como abas (Meteorologia é a segunda)
         self.notebook.add(self.pagina_grafico, text="Posição Solar")
         self.notebook.add(self.pagina_meteorologia, text="Meteorologia") # <--- AQUI
         self.notebook.add(self.pagina_painel, text="Irradiância")
-        self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
         self.notebook.add(self.pagina_potencia, text="Potência")
+        self.notebook.add(self.pagina_conversao, text="Conversão") # Nova aba Conversão
+        self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
+        self.notebook.add(self.pagina_previsao, text="Previsão") # Nova aba
 
         # --- INTEGRAÇÃO COM CSV ---
         self.csv_player = None
@@ -77,7 +101,8 @@ class SolarApp(tk.Tk):
                 self.csv_player = CsvPlayer(self)
                 if self.csv_player.load_csv(CAMINHO_ARQUIVO_CSV):
                     print("CSV carregado. A reprodução iniciará em 15 segundos...")
-                    self.after(15000, lambda: [print("Iniciando reprodução do CSV agora."), self.csv_player.start()])
+                    print("CSV carregado. A reprodução iniciará em 15 segundos...")
+                    self.after(15000, self.start_csv_playback)
                 else:
                     print("Falha ao carregar CSV. Verifique o caminho.")
             except Exception as e:
@@ -140,6 +165,8 @@ class SolarApp(tk.Tk):
             self.pagina_painel.calcular_e_atualizar_tabela()
             self.pagina_planta_solar.atualizar_modelo_pv()
             self.pagina_potencia.atualizar_modelo_pv()
+            self.pagina_conversao.atualizar_conversao() # <--- Atualiza Conversão
+            self.pagina_previsao.atualizar_previsao() # Atualiza previsao
             self.pagina_meteorologia.atualizar_meteorologia()
 
         except (ValueError, AttributeError, tk.TclError):
@@ -148,6 +175,33 @@ class SolarApp(tk.Tk):
             # traceback.print_exc() # Descomente para depuração detalhada
             pass  # Evita pop-ups de erro contínuos em caso de falha de cálculo
 
+
+    def reset_all_graphs(self):
+        """Reinicia os gráficos de todas as páginas."""
+        if hasattr(self, 'pagina_meteorologia'):
+            self.pagina_meteorologia.reset_history(confirm=False)
+        if hasattr(self, 'pagina_potencia'):
+            self.pagina_potencia.reset_history(confirm=False)
+        if hasattr(self, 'pagina_previsao'):
+            self.pagina_previsao.reset_history(confirm=False)
+        if hasattr(self, 'pagina_painel'):
+            self.pagina_painel.reset_history(confirm=False)
+        if hasattr(self, 'pagina_conversao'):
+            self.pagina_conversao.reset_history(confirm=False)
+
+    def start_csv_playback(self):
+        print("Iniciando reprodução do CSV agora.")
+        try:
+            self.reset_all_graphs()
+        except Exception as e:
+            print(f"Erro ao reiniciar gráficos: {e}")
+            traceback.print_exc()
+        
+        try:
+            if self.csv_player:
+                self.csv_player.start()
+        except Exception as e:
+            print(f"Erro ao iniciar player: {e}")
 
 if __name__ == "__main__":
     app = SolarApp()

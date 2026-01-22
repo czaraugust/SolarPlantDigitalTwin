@@ -35,10 +35,18 @@ class CsvPlayer:
             # Limpeza básica se necessário
             self.df['Date'] = self.df['Date'].astype(str)
             self.df['Time'] = self.df['Time'].astype(str)
+
+            # --- FILTRO DE HORÁRIO (05:00 - 18:00) ---
+            # Mantém apenas registros entre 05h e 18h
+            self.df = self.df[
+                (self.df['Time'] >= "05:00:00") & 
+                (self.df['Time'] <= "18:00:00")
+            ]
             
             # Reseta o índice
+            self.df = self.df.reset_index(drop=True)
             self.current_index = 0
-            print(f"CSV carregado com sucesso: {len(self.df)} registros.")
+            print(f"CSV carregado e filtrado (05:00-18:00): {len(self.df)} registros.")
             return True
         except Exception as e:
             print(f"Erro ao carregar CSV: {e}")
@@ -159,6 +167,12 @@ class CsvPlayer:
                 self.app.dados_painel['irradiancia_ghi'].set(str(row['Irradiance']))
                 # Se tivermos um controle de 'editar irradiancia', ativamos
                 self.app.editar_irradiancia_var.set(True)
+
+            # 4. Atualiza Dados Reais (Tensão e Corrente)
+            if 'Voltage S1' in row:
+                self.app.dados_painel['tensao_real'].set(str(row['Voltage S1']))
+            if 'Current S1' in row:
+                self.app.dados_painel['corrente_real'].set(str(row['Current S1']))
 
             # Força atualização dos cálculos
             self.app.atualizar_calculos_e_telas()
