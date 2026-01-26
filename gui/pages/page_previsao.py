@@ -432,12 +432,24 @@ class PaginaPrevisao(ttk.Frame):
             
             
             # Adiciona ao histórico se houver timestamp disponível no controller
+            # Adiciona ao histórico (Evita duplicatas de tempo e limita tamanho)
             solar = self.controller.solar_object
             if solar:
-                self.trail_data['timestamps'].append(solar.data_hora)
-                self.trail_data['fixo'].append(scenarios['fixo'])
-                self.trail_data['meteo'].append(scenarios['meteo'])
-                self.trail_data['real'].append(p_real)
+                current_time = solar.data_hora
+                
+                # Só adiciona se for o primeiro ponto ou se o tempo avançou
+                if not self.trail_data['timestamps'] or current_time > self.trail_data['timestamps'][-1]:
+                    self.trail_data['timestamps'].append(current_time)
+                    self.trail_data['fixo'].append(scenarios['fixo'])
+                    self.trail_data['meteo'].append(scenarios['meteo'])
+                    self.trail_data['real'].append(p_real)
+                    
+                    # Limita o tamanho do histórico (ex: 3600 pontos = 1 hora a 1s)
+                    if len(self.trail_data['timestamps']) > 3600:
+                        self.trail_data['timestamps'].pop(0)
+                        self.trail_data['fixo'].pop(0)
+                        self.trail_data['meteo'].pop(0)
+                        self.trail_data['real'].pop(0)
                 
             self._atualizar_grafico_previsao()
 

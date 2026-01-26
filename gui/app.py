@@ -7,6 +7,7 @@ import traceback
 # Importa as classes dos CÁLCULOS
 from core.solar_calculator import CalculadoraSolar
 from core.csv_player import CsvPlayer  # <-- Importação do Player
+from core.solar_analyst import SolarAnalyst # <-- Importação do Analista IA
 
 # Importa as classes das PÁGINAS DA INTERFACE
 from gui.pages.page_seguidor import PaginaGrafico
@@ -16,6 +17,7 @@ from gui.pages.page_potencia import PaginaPotencia
 from gui.pages.page_meteorologia import PaginaMeteorologia
 from gui.pages.page_previsao import PaginaPrevisao
 from gui.pages.page_conversao import PaginaConversao # <--- Import Nova Aba
+from gui.pages.page_analise import PaginaAnalise # <--- Import Nova Aba Análise
 
 # --- CONFIGURAÇÃO DE SIMULAÇÃO ---
 USA_DADOS_CSV = True  # Altere para True para usar dados do CSV
@@ -82,7 +84,9 @@ class SolarApp(tk.Tk):
         self.pagina_planta_solar = PaginaPlantaSolar(self.notebook, self)
         self.pagina_potencia = PaginaPotencia(self.notebook, self)
         self.pagina_previsao = PaginaPrevisao(self.notebook, self) # Nova aba
+
         self.pagina_conversao = PaginaConversao(self.notebook, self) # Nova aba Conversão
+        self.pagina_analise = PaginaAnalise(self.notebook, self) # Nova aba Análise
         self.pagina_meteorologia = PaginaMeteorologia(self.notebook, self)
 
         # Adiciona as páginas como abas (Meteorologia é a segunda)
@@ -93,6 +97,7 @@ class SolarApp(tk.Tk):
         self.notebook.add(self.pagina_conversao, text="Conversão") # Nova aba Conversão
         self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
         self.notebook.add(self.pagina_previsao, text="Previsão") # Nova aba
+        self.notebook.add(self.pagina_analise, text="Análise") # Nova aba Análise
 
         # --- INTEGRAÇÃO COM CSV ---
         self.csv_player = None
@@ -107,6 +112,11 @@ class SolarApp(tk.Tk):
                     print("Falha ao carregar CSV. Verifique o caminho.")
             except Exception as e:
                 print(f"Erro ao iniciar Player CSV: {e}")
+
+        # --- GÊMEO DIGITAL ANALISTA (IA) ---
+        self.solar_analyst = SolarAnalyst()
+        self.solar_analyst.on_analysis_callback = self._on_new_analysis
+        self.last_analysis_time = datetime.datetime.now()
 
         self._atualizar_em_tempo_real()
 
@@ -137,7 +147,108 @@ class SolarApp(tk.Tk):
 
         if deve_recalcular:
             self.atualizar_calculos_e_telas()
+            
+        # --- INTEGRAÇÃO ANALISTA IA ---
+        try:
+            self._feed_solar_analyst()
+        except Exception as e:
+            print(f"Erro no feed do analista: {e}")
+
         self.after(1000, self._atualizar_em_tempo_real)
+
+    def _on_new_analysis(self, timestamp, text):
+        """Callback chamado pelo SolarAnalyst (em thread separada)"""
+        # Agenda atualização na UI (Main Thread)
+        self.after(0, lambda: self.pagina_analise.add_log(timestamp, text))
+
+    def _feed_solar_analyst(self):
+        # 1. Verificar se o CSV está tocando (Requisito do Usuário)
+        if not self.csv_player or not self.csv_player.is_playing:
+            return
+
+        # 2. Coletar dados atuais do sistema
+        # Se os objetos ainda não foram criados, retorna
+        if not self.solar_object:
+            return
+
+        try:
+            ano = int(self.entradas_globais['ano'].get())
+            mes = int(self.entradas_globais['mes'].get())
+            dia = int(self.entradas_globais['dia'].get())
+            hora = int(self.entradas_globais['hora'].get())
+            minuto = int(self.entradas_globais['minuto'].get())
+            segundo = int(self.entradas_globais['segundo'].get())
+            agora = datetime.datetime(ano, mes, dia, hora, minuto, segundo)
+        except Exception:
+            agora = datetime.datetime.now()
+        
+        # Helper para pegar valor float seguramento
+        def get_float(tk_var):
+            try: return float(tk_var.get())
+            except: return 0.0
+
+        # Dados Climáticos (Vem do Controller ou da PaginaMeteorologia se disponivel)
+        temp_amb = get_float(self.dados_ambientais['temp_air']) 
+        wind_vel = get_float(self.dados_ambientais['wind_speed']) 
+        # Se CSV/Meteorologia estiver ativo, pega de lá (já que pode ser diferente do dados_ambientais se não estiver sync)
+        # Na verdade, o ideal é pegar exatamente o que está sendo visualizado.
+        # Vamos pegar da PaginaMeteorologia se possível para ter chuva e umidade
+        if hasattr(self, 'pagina_meteorologia'):
+            pm = self.pagina_meteorologia
+            temp_painel = get_float(pm.meteo_vars['temp_painel'])
+            umidade = get_float(pm.meteo_vars['umidade'])
+            vento_dir = get_float(pm.meteo_vars['vento_dir'])
+            chuva = get_float(pm.meteo_vars['chuva'])
+            # Se a pag meteorologia tiver valores mais atuais de temp/vento, usa eles
+            t_amb_meteo = get_float(pm.meteo_vars['temp_amb'])
+            v_vel_meteo = get_float(pm.meteo_vars['vento_vel'])
+        else:
+            temp_painel, umidade, vento_dir, chuva = 0, 0, 0, 0
+            t_amb_meteo, v_vel_meteo = temp_amb, wind_vel
+
+        # Dados Elétricos e Métricas (Vêm da PaginaPrevisao)
+        pp = self.pagina_previsao
+        if not pp: return
+
+        data_snapshot = {
+            'timestamp': str(agora),
+            
+            # Clima
+            'irradiancia_ghi': get_float(self.pagina_painel.saidas_irradiancia['GHI_global']),
+            'temp_amb': t_amb_meteo,
+            'temp_painel': temp_painel,
+            'umidade': umidade,
+            'vento_vel': v_vel_meteo,
+            'vento_dir': vento_dir,
+            'chuva': chuva,
+            
+            # Sol
+            'elevacao': self.solar_object.elevacao,
+            'azimute': self.solar_object.azimute,
+            
+            # Elétricos
+            'tensao_real': get_float(self.dados_painel['tensao_real']),
+            'corrente_real': get_float(self.dados_painel['corrente_real']),
+            'potencia_real': get_float(pp.mpp_outputs['real_p']),
+            'potencia_meteo': get_float(pp.mpp_outputs['meteo_p']),
+            
+            # Métricas (Do modelo Meteo)
+            'mse': get_float(pp.mpp_outputs['meteo_mse']),
+            'mae': get_float(pp.mpp_outputs['meteo_mae']),
+            'mape': float(pp.mpp_outputs['meteo_mape'].get().replace('%','')) if '%' in pp.mpp_outputs['meteo_mape'].get() else 0.0,
+            'rmse': get_float(pp.mpp_outputs['meteo_rmse']),
+        }
+
+        # 2. Adicionar ao buffer
+        self.solar_analyst.add_data_point(data_snapshot)
+
+        # 3. Verificar trigger (a cada 60s)
+        # Em simulação acelerada, 1 minuto real? O usuario pediu "1 minuto real".
+        if (agora - self.last_analysis_time).total_seconds() >= 60:
+            import threading
+            self.last_analysis_time = agora
+            # Thread para não travar a UI
+            threading.Thread(target=self.solar_analyst.analyze, daemon=True).start()
 
     def atualizar_calculos_e_telas(self):
         try:
@@ -188,6 +299,8 @@ class SolarApp(tk.Tk):
             self.pagina_painel.reset_history(confirm=False)
         if hasattr(self, 'pagina_conversao'):
             self.pagina_conversao.reset_history(confirm=False)
+        if hasattr(self, 'pagina_analise'):
+            self.pagina_analise.reset_history(confirm=False)
 
     def start_csv_playback(self):
         print("Iniciando reprodução do CSV agora.")
