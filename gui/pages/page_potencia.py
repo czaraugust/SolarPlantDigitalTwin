@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import traceback
+import matplotlib.dates as mdates
 
 from core.pv_module_model import PVSystemModel
 # <-- Importa os componentes
@@ -10,7 +11,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
-class PaginaPlantaSolar(ttk.Frame):
+class PaginaPotencia(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
@@ -18,9 +19,17 @@ class PaginaPlantaSolar(ttk.Frame):
         self.cached_pv_system = None
         self.cached_stc_results = None
         self.cached_static_inputs = {}
+        
+        # Armazena os dados do traço (histórico)
+        self.trail_data = {'timestamps': [],
+                           'horizontal': [], 'ideal': [], 'fixo': [], 'real': []}
 
         self.editar_datasheet_var = tk.BooleanVar(value=False)
-        # self.editar_ambientais_var = tk.BooleanVar(value=False) # Removido local
+        # self.editar_ambientais_var usa a do controller agora se quisermos sincronizar o estado de edição tbm? 
+        # O usuario disse campos. Vamos manter a variavel de controle de edição local por enquanto, 
+        # mas os valores (StringVar) centralizados.
+        # Mas para garantir sync total, melhor usar variaveis do controller se possivel.
+        # No app.py eu adicionei editar_ambientais_var.
         self.editar_usina_var = tk.BooleanVar(value=False)
 
         self.datasheet_widgets = []
@@ -32,6 +41,7 @@ class PaginaPlantaSolar(ttk.Frame):
         self.datasheet_vars = self.controller.dados_datasheet
         self.ambient_vars = self.controller.dados_ambientais
         self.array_vars = self.controller.dados_usina
+        
         self.mpp_outputs = {'ideal_v': tk.StringVar(), 'ideal_i': tk.StringVar(), 'ideal_p': tk.StringVar(), 'ideal_irr': tk.StringVar(), 'ideal_gain': tk.StringVar(),
                             'fixo_v': tk.StringVar(), 'fixo_i': tk.StringVar(), 'fixo_p': tk.StringVar(), 'fixo_irr': tk.StringVar(), 'fixo_gain': tk.StringVar(),
                             'horiz_v': tk.StringVar(), 'horiz_i': tk.StringVar(), 'horiz_p': tk.StringVar(), 'horiz_irr': tk.StringVar(), 'horiz_gain': tk.StringVar(),
@@ -92,6 +102,18 @@ class PaginaPlantaSolar(ttk.Frame):
             new_value = max(from_val, min(to_val, new_value))
             self.ambient_vars[variable_key].set(f"{new_value:.1f}")
             self.controller.atualizar_calculos_e_telas()
+            
+    def _clear_and_restart_trail(self):
+        self.reset_history(confirm=True)
+
+    def reset_history(self, confirm=True):
+        if confirm:
+            if not messagebox.askyesno("Confirmar Reinicialização", "Você tem certeza que deseja reiniciar o gráfico de potência?"):
+                return
+
+        self.trail_data = {'timestamps': [],
+                           'horizontal': [], 'ideal': [], 'fixo': [], 'real': []}
+        self._atualizar_grafico_potencia()
 
     def _criar_widgets(self):
         main_frame = ttk.Frame(self)
@@ -185,7 +207,7 @@ class PaginaPlantaSolar(ttk.Frame):
         arr_frame = ttk.LabelFrame(
             left_col, text="Configuração da Usina", padding=5)
         arr_frame.pack(fill="x", pady=3)
-
+        
         cb_usina = ttk.Checkbutton(
             arr_frame, text="Editar Configuração", variable=self.editar_usina_var, style="Compact.TCheckbutton")
         cb_usina.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 3))
@@ -201,31 +223,23 @@ class PaginaPlantaSolar(ttk.Frame):
             entry.bind("<KeyRelease>",
                        lambda e: self.controller.atualizar_calculos_e_telas())
             self.usina_widgets.append(entry)
+            
+        # Botão limpar gráfico
+        btn_limpar = ttk.Button(
+            left_col, text="Reiniciar Gráfico", command=self._clear_and_restart_trail)
+        btn_limpar.pack(pady=10, fill="x")
 
         right_col = ttk.Frame(main_frame)
         right_col.pack(side="left", fill="both", expand=True, padx=10)
-
-        graphs_frame = ttk.Frame(right_col)
-        graphs_frame.pack(fill="both", expand=True)
-        graphs_frame.columnconfigure(0, weight=1)
-        graphs_frame.columnconfigure(1, weight=1)
-        graphs_frame.rowconfigure(0, weight=1)
-
-        iv_graph_frame = ttk.LabelFrame(
-            graphs_frame, text="Curva I x V", padding=5)
-        iv_graph_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        self.fig_iv = Figure(dpi=100)
-        self.ax_iv = self.fig_iv.add_subplot(111)
-        self.canvas_iv = FigureCanvasTkAgg(self.fig_iv, master=iv_graph_frame)
-        self.canvas_iv.get_tk_widget().pack(fill="both", expand=True)
-
-        pv_graph_frame = ttk.LabelFrame(
-            graphs_frame, text="Curva P x V", padding=5)
-        pv_graph_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        self.fig_pv = Figure(dpi=100)
-        self.ax_pv = self.fig_pv.add_subplot(111)
-        self.canvas_pv = FigureCanvasTkAgg(self.fig_pv, master=pv_graph_frame)
-        self.canvas_pv.get_tk_widget().pack(fill="both", expand=True)
+        
+        graph_frame = ttk.LabelFrame(
+            right_col, text="Potência Gerada x Tempo", padding=10)
+        graph_frame.pack(fill="both", expand=True, pady=10)
+        
+        self.fig_power = Figure(dpi=100)
+        self.ax_power = self.fig_power.add_subplot(111)
+        self.canvas_power = FigureCanvasTkAgg(self.fig_power, master=graph_frame)
+        self.canvas_power.get_tk_widget().pack(fill="both", expand=True)
 
         mpp_frame = ttk.LabelFrame(
             right_col, text="Parâmetros Elétricos - Tempo Real", padding=10)
@@ -262,45 +276,22 @@ class PaginaPlantaSolar(ttk.Frame):
                             for k, v in self.array_vars.items()}
 
             current_static_inputs = {**datasheet, **array_config}
+            
+            # Reutiliza lógica de cache, embora aqui seja menos crítico para o gráfico histórico
+            # pois sempre recalculamos o ponto atual para adicionar ao histórico.
+            # No entanto, a criação do objeto PVSystemModel é pesada, então mantemos o cache.
 
             pv_system = self.cached_pv_system
-            stc_results = self.cached_stc_results
-
+            
             if current_static_inputs != self.cached_static_inputs:
                 pv_system = PVSystemModel(
                     datasheet, array_config['modules_per_string'], array_config['strings_in_parallel'])
-                stc_results = pv_system.calculate_curves_and_mpp(
-                    poa_global=1000, temp_air=25, wind_speed=0)
-
+                
                 self.cached_pv_system = pv_system
-                self.cached_stc_results = stc_results
                 self.cached_static_inputs = current_static_inputs
 
             if not pv_system:
                 return
-
-            # PERFORMANCE: Só desenha se a aba estiver visível
-            # Mas cuidado: aqui calculamos E desenhamos no mesmo metodo.
-            # Precisamos calcular os MPP Results pois eles atualizam as Variaveis (Strings) mostradas na UI.
-            # Mas podemos pular o .draw() dos plots.
-            is_visible = self.winfo_viewable()
-                
-            if is_visible:
-                self.ax_iv.clear()
-                self.ax_pv.clear()
-
-            # Extract STC MPP
-            v_mp_stc, i_mp_stc, p_mp_stc = stc_results['mpp']
-
-            if is_visible:
-                self.ax_iv.plot(stc_results['v_curve'],
-                                stc_results['i_curve'], label="Curva STC", color='tab:blue')
-                self.ax_pv.plot(
-                    stc_results['v_curve'], stc_results['p_curve'], label="Curva STC", color='tab:blue')
-    
-                # Marker no MPP STC
-                self.ax_iv.plot(v_mp_stc, i_mp_stc, 'o', color='tab:blue', markersize=5)
-                self.ax_pv.plot(v_mp_stc, p_mp_stc, 'o', color='tab:blue', markersize=5)
 
             irr_ideal = float(
                 self.controller.pagina_painel.saidas_irradiancia['POA_ideal_global'].get())
@@ -311,7 +302,8 @@ class PaginaPlantaSolar(ttk.Frame):
 
             scenarios = {'ideal': irr_ideal,
                          'fixo': irr_fixo, 'horiz': irr_horiz}
-            colors = {'ideal': 'red', 'fixo': 'orange', 'horiz': 'blue'}
+            
+            p_values = {}
 
             p_ideal = 0.0
             if scenarios['ideal'] > 0:
@@ -326,6 +318,7 @@ class PaginaPlantaSolar(ttk.Frame):
                     results = pv_system.calculate_curves_and_mpp(
                         irr_value, ambient['temp_air'], ambient['wind_speed'])
                     v_mp, i_mp, p_mp = results['mpp']
+                    p_values[prefix] = p_mp # W
 
                     self.mpp_outputs[f"{prefix}_irr"].set(f"{irr_value:.2f}")
                     self.mpp_outputs[f"{prefix}_v"].set(f"{v_mp:.2f}")
@@ -338,31 +331,19 @@ class PaginaPlantaSolar(ttk.Frame):
                         self.mpp_outputs[f"{prefix}_gain"].set(f"{gain_val:+.2f}%")
                     else:
                         self.mpp_outputs[f"{prefix}_gain"].set("0.00%")
-
-                    if is_visible:
-                        # Plot Curvas
-                        self.ax_iv.plot(results['v_curve'], results['i_curve'],
-                                        color=colors[prefix], label=f"Curva {prefix.capitalize()}")
-                        self.ax_pv.plot(results['v_curve'], results['p_curve'],
-                                        color=colors[prefix], label=f"Curva {prefix.capitalize()}")
-    
-                        # Marker no MPP
-                        self.ax_iv.plot(v_mp, i_mp, 'o', color=colors[prefix], markersize=5)
-                        self.ax_pv.plot(v_mp, p_mp, 'o', color=colors[prefix], markersize=5)
                 else:
+                    p_values[prefix] = 0.0
                     for key_suffix in ['irr', 'v', 'i', 'p', 'gain']:
                         self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00")
-                        if key_suffix == 'gain':
-                             self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00%")
 
+            
             # --- DADOS REAIS ---
             v_real = float(self.controller.dados_painel['tensao_real'].get() or 0)
             i_real = float(self.controller.dados_painel['corrente_real'].get() or 0)
-            p_real = (v_real * i_real)
+            p_real = (v_real * i_real) # W
             
-            # Irradiância Real (pode ser GHI global ou fixa, dependendo do sensor, aqui vamos assumir GHI global como ref ou vazia)
-            # Na verdade o CSV tem 'Irradiance'. Vamos usar GHI Global mesmo para referência.
-            irr_real = irr_horiz # Assume GHI como ref visual
+            # Irradiância Real (Reference)
+            irr_real = irr_horiz
             
             self.mpp_outputs['real_v'].set(f"{v_real:.2f}")
             self.mpp_outputs['real_i'].set(f"{i_real:.2f}")
@@ -374,35 +355,59 @@ class PaginaPlantaSolar(ttk.Frame):
                 self.mpp_outputs['real_gain'].set(f"{gain_real:+.2f}%")
             else:
                  self.mpp_outputs['real_gain'].set("0.00%")
-
-            if is_visible:
-                # Plot Ponto Real (Preto)
-                self.ax_iv.plot(v_real, i_real, 'o', color='black', markersize=6, label="Real", zorder=5)
-                self.ax_pv.plot(v_real, p_real, 'o', color='black', markersize=6, label="Real", zorder=5)
-    
-                self.ax_iv.set_title("Curva Corrente x Tensão")
-                self.ax_iv.set_xlabel("Tensão (V)")
-                self.ax_iv.set_ylabel("Corrente (A)")
-                self.ax_iv.grid(True)
-                self.ax_iv.legend()
-                self.fig_iv.tight_layout()
-                self.canvas_iv.draw()
-    
-                self.ax_pv.set_title("Curva Potência x Tensão")
-                self.ax_pv.set_xlabel("Tensão (V)")
-                self.ax_pv.set_ylabel("Potência (W)")
-                self.ax_pv.grid(True)
-                self.ax_pv.legend()
-                self.fig_pv.tight_layout()
-                self.canvas_pv.draw()
+            
+            # Adiciona ao histórico se houver timestamp disponível no controller (pegamos do solar_object)
+            solar = self.controller.solar_object
+            if solar:
+                self.trail_data['timestamps'].append(solar.data_hora)
+                self.trail_data['ideal'].append(p_values['ideal'])
+                self.trail_data['fixo'].append(p_values['fixo'])
+                self.trail_data['horizontal'].append(p_values['horiz'])
+                self.trail_data['real'].append(p_real)
+                
+            self._atualizar_grafico_potencia()
 
         except Exception:
-            # traceback.print_exc()
-            self.ax_iv.clear()
-            self.ax_pv.clear()
-            self.ax_iv.text(0.5, 0.5, "Erro no Cálculo",
-                            ha='center', va='center')
-            self.ax_pv.text(0.5, 0.5, "Erro no Cálculo",
-                            ha='center', va='center')
-            self.canvas_iv.draw()
-            self.canvas_pv.draw()
+            traceback.print_exc()
+
+    def _atualizar_grafico_potencia(self):
+        # PERFORMANCE: Só desenha se a aba estiver visível
+        if not self.winfo_viewable():
+            return
+
+        self.ax_power.clear()
+        if self.trail_data['timestamps']:
+            self.ax_power.plot(
+                self.trail_data['timestamps'], self.trail_data['horizontal'], label="Painel Horizontal", color='blue', zorder=2)
+            self.ax_power.plot(
+                self.trail_data['timestamps'], self.trail_data['ideal'], label="Painel Ideal", color='red', zorder=2)
+            self.ax_power.plot(
+                self.trail_data['timestamps'], self.trail_data['fixo'], label="Painel Fixo", color='orange', zorder=2)
+            self.ax_power.plot(
+                self.trail_data['timestamps'], self.trail_data['real'], label="Painel Real", color='black', zorder=3, linewidth=2)
+
+            last_ts = self.trail_data['timestamps'][-1]
+            self.ax_power.plot(
+                last_ts, self.trail_data['horizontal'][-1], 'o', color='mediumblue', markersize=8, zorder=4)
+            self.ax_power.plot(
+                last_ts, self.trail_data['ideal'][-1], 'o', color='darkred', markersize=8, zorder=4)
+            self.ax_power.plot(
+                last_ts, self.trail_data['fixo'][-1], 'o', color='darkorange', markersize=8, zorder=4)
+            self.ax_power.plot(
+                last_ts, self.trail_data['real'][-1], 'o', color='black', markersize=8, zorder=5)
+
+        self.ax_power.set_title("Potência Gerada (W)")
+        self.ax_power.set_xlabel("Hora")
+        self.ax_power.set_ylabel("Potência (W)")
+        if self.trail_data['timestamps']:
+            self.ax_power.legend()
+        self.ax_power.grid(
+            True, which='both', linestyle='--', linewidth=0.5)
+
+        if self.trail_data['timestamps']:
+            self.ax_power.xaxis.set_major_formatter(
+                mdates.DateFormatter('%H:%M:%S'))
+            self.fig_power.autofmt_xdate()
+
+        self.fig_power.tight_layout()
+        self.canvas_power.draw()

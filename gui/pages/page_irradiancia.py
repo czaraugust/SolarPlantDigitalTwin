@@ -140,12 +140,16 @@ class PaginaPainel(ttk.Frame):
                 self.entrada_widgets[key].config(state=state)
 
     def _clear_and_restart_trail(self):
-        resposta = messagebox.askyesno(
-            "Confirmar Reinicialização", "Você tem certeza que deseja reiniciar o gráfico?")
-        if resposta:
-            self.trail_data = {'timestamps': [],
-                               'horizontal': [], 'ideal': [], 'fixo': []}
-            self._atualizar_grafico_irradiancia()
+        self.reset_history(confirm=True)
+
+    def reset_history(self, confirm=True):
+        if confirm:
+            if not messagebox.askyesno("Confirmar Reinicialização", "Você tem certeza que deseja reiniciar o gráfico?"):
+                return
+
+        self.trail_data = {'timestamps': [],
+                           'horizontal': [], 'ideal': [], 'fixo': []}
+        self._atualizar_grafico_irradiancia()
 
     def calcular_e_atualizar_tabela(self):
         solar = self.controller.solar_object

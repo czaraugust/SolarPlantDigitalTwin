@@ -1,6 +1,6 @@
 # solar_calculator.py (CORRIGIDO v2)
 
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import math
 
 
@@ -211,3 +211,6 @@ class CalculadoraSolar:
     def azimute_por_sol(self) -> float: return self._azimute_por_sol
     @property
     def meio_dia_solar(self) -> datetime: return self._meio_dia_solar
+
+
+
