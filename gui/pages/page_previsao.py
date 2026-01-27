@@ -457,6 +457,10 @@ class PaginaPrevisao(ttk.Frame):
             traceback.print_exc()
 
     def _atualizar_grafico_previsao(self):
+        # PERFORMANCE: Só desenha se a aba estiver visível
+        if not self.winfo_viewable():
+            return
+            
         self.ax_power.clear()
         if self.trail_data['timestamps']:
             ts = self.trail_data['timestamps']

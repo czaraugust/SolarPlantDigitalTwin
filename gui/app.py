@@ -98,6 +98,9 @@ class SolarApp(tk.Tk):
         self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
         self.notebook.add(self.pagina_previsao, text="Previsão") # Nova aba
         self.notebook.add(self.pagina_analise, text="Análise") # Nova aba Análise
+        
+        # OTIMIZAÇÃO: Atualizar aba ao mudar o foco (pois paramos de desenhar quando escondida)
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         # --- INTEGRAÇÃO COM CSV ---
         self.csv_player = None
@@ -222,6 +225,12 @@ class SolarApp(tk.Tk):
             'vento_dir': vento_dir,
             'chuva': chuva,
             
+            # Localização e Configuração
+            'latitude': get_float(self.entradas_globais['latitude']),
+            'longitude': get_float(self.entradas_globais['longitude']),
+            'painel_tilt': get_float(self.dados_painel['painel_inclinacao']),
+            'painel_azimute_config': get_float(self.dados_painel['painel_azimute']),
+            
             # Sol
             'elevacao': self.solar_object.elevacao,
             'azimute': self.solar_object.azimute,
@@ -315,6 +324,55 @@ class SolarApp(tk.Tk):
                 self.csv_player.start()
         except Exception as e:
             print(f"Erro ao iniciar player: {e}")
+
+    def _on_tab_changed(self, event):
+        """Chamado quando o usuário troca de aba no notebook."""
+        try:
+            # Identifica qual aba está selecionada
+            selected_tab_id = self.notebook.select()
+            if not selected_tab_id:
+                return
+            
+            # Mapeia ID do widget (aba) para o objeto da página
+            # O .select() retorna o nome do widget interno (ex: .!notebook.!frame2)
+            # Precisamos encontrar qual de nossos objetos self.pagina_* corresponde a isso
+            
+            # Lista de todas as páginas
+            pages = [
+                self.pagina_grafico, self.pagina_meteorologia, self.pagina_painel,
+                self.pagina_potencia, self.pagina_conversao, self.pagina_planta_solar,
+                self.pagina_previsao, self.pagina_analise
+            ]
+            
+            for page in pages:
+                if str(page) == selected_tab_id:
+                    # Força atualização imediata da página selecionada
+                    # Verifica qual método de atualização ela tem
+                    if hasattr(page, 'atualizar_interface'):
+                        page.atualizar_interface()
+                    elif hasattr(page, 'atualizar_meteorologia'):
+                        page.atualizar_meteorologia()
+                    elif hasattr(page, 'calcular_e_atualizar_tabela'):
+                        page.calcular_e_atualizar_tabela()
+                    elif hasattr(page, 'atualizar_modelo_pv'):
+                        page.atualizar_modelo_pv()
+                    elif hasattr(page, 'atualizar_conversao'):
+                        page.atualizar_conversao()
+                    elif hasattr(page, 'atualizar_previsao'):
+                        page.atualizar_previsao()
+                        
+                    # Se tiver grafico historico, força redraw tb
+                    if hasattr(page, '_atualizar_grafico_potencia'):
+                        page._atualizar_grafico_potencia()
+                    if hasattr(page, '_atualizar_grafico_previsao'):
+                        page._atualizar_grafico_previsao()
+                    if hasattr(page, '_plot_graphs'):
+                        page._plot_graphs()
+                        
+                    break
+                    
+        except Exception as e:
+            print(f"Erro ao trocar aba: {e}")
 
 if __name__ == "__main__":
     app = SolarApp()

@@ -1,3 +1,20 @@
-.env
-__pycache__/
+# Byte-code files
 *.pyc
+__pycache__/
+
+# Environments
+.venv/
+venv/
+env/
+# other common environment names
+.env
+pip-wheel-metadata/
+
+# Editor/OS temporary files
+.DS_Store
+.idea/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

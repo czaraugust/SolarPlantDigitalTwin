@@ -249,6 +249,10 @@ class PaginaMeteorologia(ttk.Frame):
             pass
 
     def _plot_graphs(self):
+        # PERFORMANCE: Só desenha se a aba estiver visível
+        if not self.winfo_viewable():
+            return
+
         current_time = time.time()
         if current_time - self.last_plot_time < 0.2: # Limit to 5 FPS
             return

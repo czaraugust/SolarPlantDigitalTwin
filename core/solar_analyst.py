@@ -231,7 +231,14 @@ Você é o cérebro que avalia um Gêmeo Digital de uma planta solar.
 
 {memory_section}
 
+
 DADOS ATUAIS ({data.get('start_time')} até {data.get('end_time')}):
+
+0. LOCALIZAÇÃO & CONFIGURAÇÃO:
+- Latitude: {data.get('latitude_mean'):.4f}
+- Longitude: {data.get('longitude_mean'):.4f}
+- Inclinação do Painel: {data.get('painel_tilt_mean'):.1f}°
+- Azimute do Painel: {data.get('painel_azimute_config_mean'):.1f}°
 
 1. CLIMA & AMBIENTE:
 - Irradiância GHI (W/m²): Média {data.get('irradiancia_ghi_mean'):.1f} (Min {data.get('irradiancia_ghi_min'):.1f} / Max {data.get('irradiancia_ghi_max'):.1f})
@@ -241,29 +248,27 @@ DADOS ATUAIS ({data.get('start_time')} até {data.get('end_time')}):
 - Vento: Direção {data.get('vento_dir_mean'):.0f}°
 - Chuva Acumulada (mm): {data.get('chuva_max'):.1f}
 - Umidade (%): {data.get('umidade_mean'):.1f}
-
-2. POSIÇÃO SOLAR:
-- Elevação: {data.get('elevacao_mean'):.1f}°
-- Azimute: {data.get('azimute_mean'):.1f}°
+- Elevação do Sol: {data.get('elevacao_mean'):.1f}°
+- Azimute do Sol: {data.get('azimute_mean'):.1f}°
 
 
-3. PERFORMANCE ELÉTRICA (Painel Fixo):
+2. PERFORMANCE ELÉTRICA (Painel Fixo):
 - Potência REAL (W): Média {data.get('potencia_real_mean'):.1f}
-- Potência PREVISTA (Modelo Meteo) (W): Média {data.get('potencia_meteo_mean'):.1f}
+- Potência PREVISTA (W): Média {data.get('potencia_meteo_mean'):.1f}
 - Tensão (V): {data.get('tensao_real_mean'):.1f}
 - Corrente (A): {data.get('corrente_real_mean'):.1f}
 
-4. MÉTRICAS DE ERRO (Qualidade do Gêmeo Digital):
+3. MÉTRICAS DE ERRO (Qualidade do Gêmeo Digital):
 - MSE (W²): {data.get('mse_mean'):.2f}
 - MAE (W): {data.get('mae_mean'):.2f}
 - MAPE (%): {data.get('mape_mean'):.2f}%
 - RMSE (W): {data.get('rmse_mean'):.2f}
 
 TAREFA:
-Faça uma análise crítica e concisa (máximo 2 parágrafos) cobrindo:
+Faça uma análise crítica e concisa (máximo 3 parágrafos) cobrindo:
 1. Comente a evolucao em relacao as analises anteriores (se houver no contexto).
-2. Ambiente vs Geração: Correlacione irradiância, temperatura e posição solar com a potência.
-3. Qualidade do Gêmeo: O modelo está aderente?
+2. Ambiente vs Geração: Correlacione a data do ano, hora do dia, elevação do sol, azimute do sol, localização da planta, inclinação do painel, azimute do painel, irradiância, temperatura ambiente e do painel, velocidade e direção do vento, chuva acumulada, umidade com a potência gerada.
+3. Qualidade do Gêmeo: O modelo está aderente? Avalie as métricas de erro.
 
 Se estiver de noite (Irradiância < 5 W/m²), informe apenas que o sistema está em repouso e ignore o resto.
 """

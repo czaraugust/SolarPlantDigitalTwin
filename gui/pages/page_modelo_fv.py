@@ -279,19 +279,28 @@ class PaginaPlantaSolar(ttk.Frame):
             if not pv_system:
                 return
 
-            self.ax_iv.clear()
-            self.ax_pv.clear()
+            # PERFORMANCE: Só desenha se a aba estiver visível
+            # Mas cuidado: aqui calculamos E desenhamos no mesmo metodo.
+            # Precisamos calcular os MPP Results pois eles atualizam as Variaveis (Strings) mostradas na UI.
+            # Mas podemos pular o .draw() dos plots.
+            is_visible = self.winfo_viewable()
+                
+            if is_visible:
+                self.ax_iv.clear()
+                self.ax_pv.clear()
+
             # Extract STC MPP
             v_mp_stc, i_mp_stc, p_mp_stc = stc_results['mpp']
 
-            self.ax_iv.plot(stc_results['v_curve'],
-                            stc_results['i_curve'], label="Curva STC", color='tab:blue')
-            self.ax_pv.plot(
-                stc_results['v_curve'], stc_results['p_curve'], label="Curva STC", color='tab:blue')
-
-            # Marker no MPP STC
-            self.ax_iv.plot(v_mp_stc, i_mp_stc, 'o', color='tab:blue', markersize=5)
-            self.ax_pv.plot(v_mp_stc, p_mp_stc, 'o', color='tab:blue', markersize=5)
+            if is_visible:
+                self.ax_iv.plot(stc_results['v_curve'],
+                                stc_results['i_curve'], label="Curva STC", color='tab:blue')
+                self.ax_pv.plot(
+                    stc_results['v_curve'], stc_results['p_curve'], label="Curva STC", color='tab:blue')
+    
+                # Marker no MPP STC
+                self.ax_iv.plot(v_mp_stc, i_mp_stc, 'o', color='tab:blue', markersize=5)
+                self.ax_pv.plot(v_mp_stc, p_mp_stc, 'o', color='tab:blue', markersize=5)
 
             irr_ideal = float(
                 self.controller.pagina_painel.saidas_irradiancia['POA_ideal_global'].get())
@@ -330,15 +339,16 @@ class PaginaPlantaSolar(ttk.Frame):
                     else:
                         self.mpp_outputs[f"{prefix}_gain"].set("0.00%")
 
-                    # Plot Curvas
-                    self.ax_iv.plot(results['v_curve'], results['i_curve'],
-                                    color=colors[prefix], label=f"Curva {prefix.capitalize()}")
-                    self.ax_pv.plot(results['v_curve'], results['p_curve'],
-                                    color=colors[prefix], label=f"Curva {prefix.capitalize()}")
-
-                    # Marker no MPP
-                    self.ax_iv.plot(v_mp, i_mp, 'o', color=colors[prefix], markersize=5)
-                    self.ax_pv.plot(v_mp, p_mp, 'o', color=colors[prefix], markersize=5)
+                    if is_visible:
+                        # Plot Curvas
+                        self.ax_iv.plot(results['v_curve'], results['i_curve'],
+                                        color=colors[prefix], label=f"Curva {prefix.capitalize()}")
+                        self.ax_pv.plot(results['v_curve'], results['p_curve'],
+                                        color=colors[prefix], label=f"Curva {prefix.capitalize()}")
+    
+                        # Marker no MPP
+                        self.ax_iv.plot(v_mp, i_mp, 'o', color=colors[prefix], markersize=5)
+                        self.ax_pv.plot(v_mp, p_mp, 'o', color=colors[prefix], markersize=5)
                 else:
                     for key_suffix in ['irr', 'v', 'i', 'p', 'gain']:
                         self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00")
@@ -365,25 +375,26 @@ class PaginaPlantaSolar(ttk.Frame):
             else:
                  self.mpp_outputs['real_gain'].set("0.00%")
 
-            # Plot Ponto Real (Preto)
-            self.ax_iv.plot(v_real, i_real, 'o', color='black', markersize=6, label="Real", zorder=5)
-            self.ax_pv.plot(v_real, p_real, 'o', color='black', markersize=6, label="Real", zorder=5)
-
-            self.ax_iv.set_title("Curva Corrente x Tensão")
-            self.ax_iv.set_xlabel("Tensão (V)")
-            self.ax_iv.set_ylabel("Corrente (A)")
-            self.ax_iv.grid(True)
-            self.ax_iv.legend()
-            self.fig_iv.tight_layout()
-            self.canvas_iv.draw()
-
-            self.ax_pv.set_title("Curva Potência x Tensão")
-            self.ax_pv.set_xlabel("Tensão (V)")
-            self.ax_pv.set_ylabel("Potência (W)")
-            self.ax_pv.grid(True)
-            self.ax_pv.legend()
-            self.fig_pv.tight_layout()
-            self.canvas_pv.draw()
+            if is_visible:
+                # Plot Ponto Real (Preto)
+                self.ax_iv.plot(v_real, i_real, 'o', color='black', markersize=6, label="Real", zorder=5)
+                self.ax_pv.plot(v_real, p_real, 'o', color='black', markersize=6, label="Real", zorder=5)
+    
+                self.ax_iv.set_title("Curva Corrente x Tensão")
+                self.ax_iv.set_xlabel("Tensão (V)")
+                self.ax_iv.set_ylabel("Corrente (A)")
+                self.ax_iv.grid(True)
+                self.ax_iv.legend()
+                self.fig_iv.tight_layout()
+                self.canvas_iv.draw()
+    
+                self.ax_pv.set_title("Curva Potência x Tensão")
+                self.ax_pv.set_xlabel("Tensão (V)")
+                self.ax_pv.set_ylabel("Potência (W)")
+                self.ax_pv.grid(True)
+                self.ax_pv.legend()
+                self.fig_pv.tight_layout()
+                self.canvas_pv.draw()
 
         except Exception:
             # traceback.print_exc()
