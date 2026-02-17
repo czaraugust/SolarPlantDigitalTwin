@@ -23,21 +23,29 @@ class PaginaPrevisao(ttk.Frame):
         
         # Armazena os dados do traço (histórico)
         self.trail_data = {'timestamps': [],
-                           'fixo': [], 'meteo': [], 'real': []}
+                           'sensor': [], 'faiman': [], 'ross': [], 'sapm': [], 'real': []}
         
         # Dados para calculo de erros acumulados
         self.error_stats = {
-            'fixo': {
+            'sensor': {
                 'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
-                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
             },
-            'meteo': {
+            'faiman': {
                 'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
-                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
+            },
+            'ross': {
+                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
+                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
+            },
+            'sapm': {
+                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
+                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
             },
             'real': {
                 'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
-                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
             } 
         }
 
@@ -54,17 +62,30 @@ class PaginaPrevisao(ttk.Frame):
         
         # Outputs da tabela de comparação
         self.mpp_outputs = {
-            'fixo_p': tk.StringVar(), 
-            'fixo_mse': tk.StringVar(), 'fixo_mae': tk.StringVar(), 
-            'fixo_mape': tk.StringVar(), 'fixo_rmse': tk.StringVar(),
+            'sensor_p': tk.StringVar(), 
+            'sensor_mse': tk.StringVar(), 'sensor_mae': tk.StringVar(), 
+            'sensor_rmse': tk.StringVar(), 'sensor_mape': tk.StringVar(),
+            'sensor_wape': tk.StringVar(),
             
-            'meteo_p': tk.StringVar(), 
-            'meteo_mse': tk.StringVar(), 'meteo_mae': tk.StringVar(), 
-            'meteo_mape': tk.StringVar(), 'meteo_rmse': tk.StringVar(),
+            'faiman_p': tk.StringVar(), 
+            'faiman_mse': tk.StringVar(), 'faiman_mae': tk.StringVar(), 
+            'faiman_rmse': tk.StringVar(), 'faiman_mape': tk.StringVar(),
+            'faiman_wape': tk.StringVar(),
+            
+            'ross_p': tk.StringVar(), 
+            'ross_mse': tk.StringVar(), 'ross_mae': tk.StringVar(), 
+            'ross_rmse': tk.StringVar(), 'ross_mape': tk.StringVar(),
+            'ross_wape': tk.StringVar(),
+
+            'sapm_p': tk.StringVar(), 
+            'sapm_mse': tk.StringVar(), 'sapm_mae': tk.StringVar(), 
+            'sapm_rmse': tk.StringVar(), 'sapm_mape': tk.StringVar(),
+            'sapm_wape': tk.StringVar(),
             
             'real_p': tk.StringVar(), 
             'real_mse': tk.StringVar(), 'real_mae': tk.StringVar(), 
-            'real_mape': tk.StringVar(), 'real_rmse': tk.StringVar()
+            'real_rmse': tk.StringVar(), 'real_mape': tk.StringVar(),
+            'real_wape': tk.StringVar()
         }
 
         self._criar_widgets()
@@ -132,13 +153,13 @@ class PaginaPrevisao(ttk.Frame):
                 return
 
         self.trail_data = {'timestamps': [],
-                           'fixo': [], 'meteo': [], 'real': []}
+                           'sensor': [], 'faiman': [], 'ross': [], 'sapm': [], 'real': []}
         
         # Reset de todas as estatísticas de erro
         for k in self.error_stats:
             self.error_stats[k] = {
                 'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
-                'sum_abs_perc': 0.0, 'count': 0, 'count_mape': 0
+                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
             }
         
         self._atualizar_grafico_previsao()
@@ -275,14 +296,15 @@ class PaginaPrevisao(ttk.Frame):
 
         # Atualizando Headers para novas colunas
         headers = [
-            "Cenário", "Potência (W)", "MSE (W²)", "MAE (W)", "MAPE (%)", "RMSE (W)"]
+            "Cenário", "Potência (W)", "MSE (W²)", "MAE (W)", "RMSE (W)", "MAPE (%)", "WAPE (%)"]
         
         for col, text in enumerate(headers):
             ttk.Label(mpp_frame, text=text, font=('TkDefaultFont', 6, 'bold')).grid(
                 row=0, column=col, padx=4, sticky="w")
 
-        # Ordem solicitada: Real, Fixo (MODELO), Meteo (NOVO)
-        rows = [("REAL", "real"), ("MODELO (MANUAL)", "fixo"), ("MODELO (METEO)", "meteo")]
+        # Ordem solicitada: Real, Sensor, Faiman, Ross, SAPM
+        rows = [("REAL", "real"), ("MODELO @ SENSOR", "sensor"), ("MODELO @ FAIMAN", "faiman"), 
+                ("MODELO @ ROSS", "ross"), ("MODELO @ SAPM", "sapm")]
         
         for row, (label, prefix) in enumerate(rows, start=1):
             lbl_style = "TkDefaultFont" if prefix != "real" else ("TkDefaultFont", 9, "bold")
@@ -301,13 +323,17 @@ class PaginaPrevisao(ttk.Frame):
             ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_mae"], state="readonly", width=10).grid(
                     row=row, column=3, padx=2)
             
-            # MAPE
-            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_mape"], state="readonly", width=10).grid(
-                    row=row, column=4, padx=2)
-            
             # RMSE
             ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_rmse"], state="readonly", width=10).grid(
+                    row=row, column=4, padx=2)
+
+            # MAPE
+            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_mape"], state="readonly", width=10).grid(
                     row=row, column=5, padx=2)
+            
+            # WAPE
+            ttk.Entry(mpp_frame, textvariable=self.mpp_outputs[f"{prefix}_wape"], state="readonly", width=10).grid(
+                    row=row, column=6, padx=2)
 
     def atualizar_previsao(self):
         try:
@@ -334,50 +360,79 @@ class PaginaPrevisao(ttk.Frame):
             if not pv_system:
                 return
 
-            # Dados Ambientais 1: Manual/Fixo (Sliders)
-            ambient_fixed = {k: float(v.get()) for k, v in self.ambient_vars.items()}
-
-            # Dados Ambientais 2: Meteo Real (CSV/Aba Metereologia)
+            # Dados Ambientais 1: Manual/Fixo (Sliders) -> Agora SENSOR
+            temp_painel_sensor = 0.0
+            
+            # Dados Ambientais 2: Meteo Real (CSV/Aba Metereologia) -> Agora FAIMAN
             ambient_meteo = {
                 'temp_air': 25.0, 'wind_speed': 1.0 # Default
             }
+
             if hasattr(self.controller, 'pagina_meteorologia'):
                 pm = self.controller.pagina_meteorologia
                 if hasattr(pm, 'meteo_vars'):
-                     # Conversão de unidades se necessario. O modelo espera C e m/s.
-                     # O slider de vento está em km/h? Verificando slider do page_meteorologia: "Velocidade do Vento" ... 0-80 km/h
-                     # O modelo pvlib espera WIND SPEED [m/s].
-                     # PRECISARÁ CONVERTER km/h -> m/s se o valor vier de la.
+                     # Pega valores da aba meteorologia (que podem vir do CSV)
                      
+                     # 1. FAIMAN Inputs (Ar + Vento)
                      t_amb_str = pm.meteo_vars['temp_amb'].get()
                      v_vel_str = pm.meteo_vars['vento_vel'].get() # km/h
                      
                      if t_amb_str: ambient_meteo['temp_air'] = float(t_amb_str)
                      if v_vel_str: ambient_meteo['wind_speed'] = float(v_vel_str) / 3.6 # km/h -> m/s
+                     
+                     # 2. SENSOR Inputs (Painel Real)
+                     t_painel_str = pm.meteo_vars['temp_painel'].get()
+                     if t_painel_str: temp_painel_sensor = float(t_painel_str)
 
             irr_fixo = float(
                 self.controller.pagina_painel.saidas_irradiancia['POA_fixo_global'].get())
 
             # Cenários de Cálculo
-            # 1. Fixo (Sliders)
-            # 2. Meteo (Real-Time Temp/Wind)
+            # 1. Sensor (Usa Temp Painel Real - Ignora Faiman)
+            # 2. Faiman (Usa Temp Amb + Vento - Calcula Faiman)
+            # 3. Ross (Usa Temp Amb + POA)
+            # 4. SAPM (Usa Temp Sensor + POA)
             scenarios = {}
             
-            # --- CÁLCULO FIXO ---
+            # --- CÁLCULO SENSOR (FORCED TEMP) ---
             if irr_fixo > 0:
-                res_fixo = pv_system.calculate_curves_and_mpp(
-                    irr_fixo, ambient_fixed['temp_air'], ambient_fixed['wind_speed'])
-                scenarios['fixo'] = res_fixo['mpp'][2] # Power
+                res_sensor = pv_system.calculate_curves_and_mpp(
+                    irr_fixo, 25.0, 1.0, forced_cell_temp=temp_painel_sensor) # Temp/Wind ignored
+                scenarios['sensor'] = res_sensor['mpp'][2] # Power
             else:
-                scenarios['fixo'] = 0.0
+                scenarios['sensor'] = 0.0
 
-            # --- CÁLCULO METEO ---
+            # --- CÁLCULO FAIMAN (STANDARD) ---
             if irr_fixo > 0:
-                res_meteo = pv_system.calculate_curves_and_mpp(
-                    irr_fixo, ambient_meteo['temp_air'], ambient_meteo['wind_speed'])
-                scenarios['meteo'] = res_meteo['mpp'][2] # Power
+                res_faiman = pv_system.calculate_curves_and_mpp(
+                    irr_fixo, ambient_meteo['temp_air'], ambient_meteo['wind_speed']) 
+                scenarios['faiman'] = res_faiman['mpp'][2] # Power
             else:
-                scenarios['meteo'] = 0.0
+                scenarios['faiman'] = 0.0
+
+            # --- CÁLCULO ROSS (T_cell = T_amb + (POA/1000)*45) ---
+            if irr_fixo > 0:
+                # Ross Coeff DeltaT = 45 -> k = 0.045 C/(W/m2) se normalizado por 1000
+                delta_t_ross = (irr_fixo / 1000.0) * 45.0
+                temp_cell_ross = ambient_meteo['temp_air'] + delta_t_ross
+                
+                res_ross = pv_system.calculate_curves_and_mpp(
+                    irr_fixo, 25.0, 1.0, forced_cell_temp=temp_cell_ross)
+                scenarios['ross'] = res_ross['mpp'][2]
+            else:
+                scenarios['ross'] = 0.0
+
+            # --- CÁLCULO SAPM Module (T_cell = T_module + (POA/1000)*1) ---
+            if irr_fixo > 0:
+                # DeltaT = 1
+                delta_t_sapm = (irr_fixo / 1000.0) * 1.0
+                temp_cell_sapm = temp_painel_sensor + delta_t_sapm
+                
+                res_sapm = pv_system.calculate_curves_and_mpp(
+                    irr_fixo, 25.0, 1.0, forced_cell_temp=temp_cell_sapm)
+                scenarios['sapm'] = res_sapm['mpp'][2]
+            else:
+                scenarios['sapm'] = 0.0
 
 
             # --- DADOS REAIS (REFERÊNCIA) ---
@@ -390,9 +445,10 @@ class PaginaPrevisao(ttk.Frame):
             self.mpp_outputs['real_mae'].set("REF")
             self.mpp_outputs['real_mape'].set("REF")
             self.mpp_outputs['real_rmse'].set("REF")
+            self.mpp_outputs['real_wape'].set("REF")
 
             # Update UI & Stats
-            for prefix in ['fixo', 'meteo']:
+            for prefix in ['sensor', 'faiman', 'ross', 'sapm']:
                 p_w = scenarios[prefix]
                 self.mpp_outputs[f"{prefix}_p"].set(f"{p_w:.2f}")
 
@@ -404,6 +460,7 @@ class PaginaPrevisao(ttk.Frame):
                 # Atualiza somatórios
                 self.error_stats[prefix]['sum_sq_err'] += sq_diff
                 self.error_stats[prefix]['sum_abs_err'] += abs_diff
+                self.error_stats[prefix]['sum_real'] += p_real
                 self.error_stats[prefix]['count'] += 1
                 
                 count = self.error_stats[prefix]['count']
@@ -429,6 +486,12 @@ class PaginaPrevisao(ttk.Frame):
                 count_mape = self.error_stats[prefix]['count_mape']
                 mape = (self.error_stats[prefix]['sum_abs_perc'] / count_mape * 100) if count_mape > 0 else 0.0
                 self.mpp_outputs[f"{prefix}_mape"].set(f"{mape:.2f}%")
+
+                # WAPE
+                sum_real = self.error_stats[prefix]['sum_real']
+                sum_abs_err = self.error_stats[prefix]['sum_abs_err']
+                wape = (sum_abs_err / sum_real * 100) if sum_real > 0 else 0.0
+                self.mpp_outputs[f"{prefix}_wape"].set(f"{wape:.2f}%")
             
             
             # Adiciona ao histórico se houver timestamp disponível no controller
@@ -440,15 +503,28 @@ class PaginaPrevisao(ttk.Frame):
                 # Só adiciona se for o primeiro ponto ou se o tempo avançou
                 if not self.trail_data['timestamps'] or current_time > self.trail_data['timestamps'][-1]:
                     self.trail_data['timestamps'].append(current_time)
-                    self.trail_data['fixo'].append(scenarios['fixo'])
-                    self.trail_data['meteo'].append(scenarios['meteo'])
+                    self.trail_data['sensor'].append(scenarios['sensor'])
+                    self.trail_data['faiman'].append(scenarios['faiman'])
+                    self.trail_data['ross'].append(scenarios['ross'])
+                    self.trail_data['sapm'].append(scenarios['sapm'])
                     self.trail_data['real'].append(p_real)
                     
+                    # LOG DE TEMPERATURAS PARA DEBUG (Solicitado pelo usuário)
+                    # Recalcula Faiman temp só para print (modelo já calculou internamente)
+                    try:
+                        import pvlib
+                        t_faiman = pvlib.temperature.faiman(irr_fixo, ambient_meteo['temp_air'], ambient_meteo['wind_speed'])
+                        print(f"[TEMP CHECK] Sensor: {temp_painel_sensor:.1f}°C | Faiman: {t_faiman:.1f}°C | Ross: {temp_cell_ross:.1f}°C | SAPM: {temp_cell_sapm:.1f}°C")
+                    except:
+                        pass
+
                     # Limita o tamanho do histórico (ex: 3600 pontos = 1 hora a 1s)
                     if len(self.trail_data['timestamps']) > 3600:
                         self.trail_data['timestamps'].pop(0)
-                        self.trail_data['fixo'].pop(0)
-                        self.trail_data['meteo'].pop(0)
+                        self.trail_data['sensor'].pop(0)
+                        self.trail_data['faiman'].pop(0)
+                        self.trail_data['ross'].pop(0)
+                        self.trail_data['sapm'].pop(0)
                         self.trail_data['real'].pop(0)
                 
             self._atualizar_grafico_previsao()
@@ -465,22 +541,30 @@ class PaginaPrevisao(ttk.Frame):
         if self.trail_data['timestamps']:
             ts = self.trail_data['timestamps']
             
-            # Modelo Fixo (Blue)
-            self.ax_power.plot(ts, self.trail_data['fixo'], label="MODELO (MANUAL)", color='blue', zorder=2)
+            # Modelo Sensor (Blue)
+            self.ax_power.plot(ts, self.trail_data['sensor'], label="MODELO @ SENSOR", color='blue', zorder=2)
             
-            # Modelo Meteo (Green)
-            self.ax_power.plot(ts, self.trail_data['meteo'], label="MODELO (METEO)", color='green', linestyle='--', zorder=3)
+            # Modelo Faiman (Green)
+            self.ax_power.plot(ts, self.trail_data['faiman'], label="MODELO @ FAIMAN", color='green', linestyle='--', zorder=3)
+
+            # Modelo Ross (Orange)
+            self.ax_power.plot(ts, self.trail_data['ross'], label="MODELO @ ROSS", color='darkorange', linestyle='-.', zorder=3)
+
+            # Modelo SAPM (Purple)
+            self.ax_power.plot(ts, self.trail_data['sapm'], label="MODELO @ SAPM", color='purple', linestyle=':', zorder=3)
             
             # Real (Black)
             self.ax_power.plot(ts, self.trail_data['real'], label="REAL", color='black', alpha=0.8, linewidth=2, zorder=1)
 
             # Dots no final
             last_ts = ts[-1]
-            self.ax_power.plot(last_ts, self.trail_data['fixo'][-1], 'o', color='mediumblue', markersize=6)
-            self.ax_power.plot(last_ts, self.trail_data['meteo'][-1], 'o', color='darkgreen', markersize=6)
+            self.ax_power.plot(last_ts, self.trail_data['sensor'][-1], 'o', color='mediumblue', markersize=6)
+            self.ax_power.plot(last_ts, self.trail_data['faiman'][-1], 'o', color='darkgreen', markersize=6)
+            self.ax_power.plot(last_ts, self.trail_data['ross'][-1], 'o', color='darkorange', markersize=6)
+            self.ax_power.plot(last_ts, self.trail_data['sapm'][-1], 'o', color='purple', markersize=6)
             self.ax_power.plot(last_ts, self.trail_data['real'][-1], 'o', color='black', markersize=6)
 
-        self.ax_power.set_title("Comparação: Manual vs Meteo Real vs Saída Real")
+        self.ax_power.set_title("Comparação: Modelos Térmicos (Real vs Faiman vs Ross vs SAPM)")
         self.ax_power.set_xlabel("Hora")
         self.ax_power.set_ylabel("Potência (W)")
         if self.trail_data['timestamps']:

@@ -263,6 +263,7 @@ DADOS ATUAIS ({data.get('start_time')} até {data.get('end_time')}):
 - MAE (W): {data.get('mae_mean'):.2f}
 - MAPE (%): {data.get('mape_mean'):.2f}%
 - RMSE (W): {data.get('rmse_mean'):.2f}
+- WAPE (%): {data.get('wape_mean'):.2f}%
 
 TAREFA:
 Faça uma análise crítica e concisa (máximo 3 parágrafos) cobrindo:

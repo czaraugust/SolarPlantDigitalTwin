@@ -24,6 +24,8 @@ class PVSystemModel:
         """
         Ajusta os parâmetros do modelo de diodo único para STC usando os dados do datasheet.
         """
+
+    
         I_L_ref, I_0_ref, R_s, R_sh, a_ref, Adjust = pvlib.ivtools.sdm.fit_cec_sam(
             celltype=self.datasheet['cell_type'],
             v_mp=self.datasheet['v_mp'],
@@ -44,10 +46,17 @@ class PVSystemModel:
             'a_ref': a_ref
         }
 
-    def calculate_curves_and_mpp(self, poa_global, temp_air, wind_speed):
+    def calculate_curves_and_mpp(self, poa_global, temp_air, wind_speed, forced_cell_temp=None):
         """
         Calcula as curvas I-V, P-V e o ponto de máxima potência (MPP) para o 
         sistema completo sob as condições operacionais fornecidas.
+        
+        Args:
+            poa_global: Irradiância no plano do array (W/m²)
+            temp_air: Temperatura ambiente (°C) - Usada se forced_cell_temp=None
+            wind_speed: Velocidade do vento (m/s) - Usada se forced_cell_temp=None
+            forced_cell_temp: (Opcional) Temperatura da Célula (°C). Se fornecida,
+                              ignora o modelo Faiman e usa este valor diretamente.
         """
         try:
             # Evita RuntimeWarnings (overflow/invalid value) em situações de muito baixa irradiância (noite)
@@ -70,14 +79,18 @@ class PVSystemModel:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 
-                # 1. Calcular a temperatura da célula
-                temp_cell = pvlib.temperature.faiman(
-                    poa_global=effective_irradiance,
-                    temp_air=temp_air,
-                    wind_speed=wind_speed
-                )
+                # 1. Calcular a temperatura da célula (ou usar valor forçado)
+                if forced_cell_temp is not None:
+                    temp_cell = float(forced_cell_temp)
+                else:
+                    temp_cell = pvlib.temperature.faiman(
+                        poa_global=effective_irradiance,
+                        temp_air=temp_air,
+                        wind_speed=wind_speed
+                    )
 
                 # 2. Escalar os parâmetros de STC para as condições de operação atuais
+       
                 photocurrent, saturation_current, resistance_series, resistance_shunt, nNsVth = pvlib.pvsystem.calcparams_desoto(
                     effective_irradiance=effective_irradiance,
                     temp_cell=temp_cell,

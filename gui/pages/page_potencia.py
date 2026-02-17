@@ -367,6 +367,35 @@ class PaginaPotencia(ttk.Frame):
                 
             self._atualizar_grafico_potencia()
 
+            # --- VERIFICAÇÃO DE TEMPERATURA A PEDIDO DO USUÁRIO ---
+            # Compare Faiman Model vs Sensor/Slider
+            try:
+                import pvlib
+                # 1. Calcular Temp Faiman (Teórico)
+                # Usa os inputs do Slider da aba Potencia (Manual) ou do CSV se estiver rodando
+                irr_poa = irr_fixo # Usamos a irradiância no plano fixo como referência
+                t_amb = ambient['temp_air']
+                wind = ambient['wind_speed']
+                
+                temp_faiman = pvlib.temperature.faiman(irr_poa, t_amb, wind)
+                
+                # 2. Pegar Temp Sensor (Real/Slider Meteorologia)
+                temp_sensor = 0.0
+                if hasattr(self.controller, 'pagina_meteorologia'):
+                    pm = self.controller.pagina_meteorologia
+                    if hasattr(pm, 'meteo_vars'):
+                        temp_sensor = float(pm.meteo_vars['temp_painel'].get())
+                
+                # 3. Comparar e Printar
+                diff_perc = 0.0
+                if temp_sensor != 0:
+                    diff_perc = ((temp_faiman - temp_sensor) / temp_sensor) * 100
+                
+                print(f"[MODELO TÉRMICO] Calc(Faiman): {temp_faiman:.1f}°C | Real(Sensor): {temp_sensor:.1f}°C | Diff: {diff_perc:+.1f}%")
+                
+            except Exception as e:
+                print(f"Erro ao comparar temperaturas: {e}")
+
         except Exception:
             traceback.print_exc()
 

@@ -33,7 +33,7 @@ class SolarApp(tk.Tk):
         # --- DADOS E VARIÁVEIS CENTRALIZADOS ---
         self.solar_object = None
         self.dados_painel = {
-            "painel_inclinacao": tk.StringVar(value="10.0"),
+            "painel_inclinacao": tk.StringVar(value="5.0"),
             "painel_azimute": tk.StringVar(value="0.0"),
             "irradiancia_ghi": tk.StringVar(value="850"),
             "albedo": tk.StringVar(value="0.2"),
@@ -49,10 +49,16 @@ class SolarApp(tk.Tk):
             'wind_speed': tk.StringVar(value="1.0")
         }
         self.dados_datasheet = {
-            'v_oc': tk.StringVar(value="39.4"), 'i_sc': tk.StringVar(value="9.09"),
+            'v_oc': tk.StringVar(value="38.8"), 'i_sc': tk.StringVar(value="9.09"),
             'v_mp': tk.StringVar(value="31.7"), 'i_mp': tk.StringVar(value="8.52"),
-            'alpha_sc': tk.StringVar(value="0.00523"), 'beta_voc': tk.StringVar(value="-0.15438"),
-            'gamma_pmp': tk.StringVar(value="-0.38"), 'cells_in_series': tk.StringVar(value="60"),
+            # Coeficientes:
+            # Alpha (Isc): 0.06 %/C -> 0.0006 * 9.09 = 0.005454 A/C
+            # Beta (Voc): -0.30 %/C -> -0.0030 * 38.8 = -0.1164 V/C
+            # Gamma (Pmp): -0.40 %/C
+            'alpha_sc': tk.StringVar(value="0.005454"), 
+            'beta_voc': tk.StringVar(value="-0.1164"),
+            'gamma_pmp': tk.StringVar(value="-0.40"), 
+            'cells_in_series': tk.StringVar(value="60"),
             'cell_type': tk.StringVar(value='polySi')
         }
         self.entradas_globais = {
@@ -117,8 +123,8 @@ class SolarApp(tk.Tk):
                 print(f"Erro ao iniciar Player CSV: {e}")
 
         # --- GÊMEO DIGITAL ANALISTA (IA) ---
-        self.solar_analyst = SolarAnalyst()
-        self.solar_analyst.on_analysis_callback = self._on_new_analysis
+        # self.solar_analyst = SolarAnalyst()
+        # self.solar_analyst.on_analysis_callback = self._on_new_analysis
         self.last_analysis_time = datetime.datetime.now()
 
         self._atualizar_em_tempo_real()
@@ -152,10 +158,10 @@ class SolarApp(tk.Tk):
             self.atualizar_calculos_e_telas()
             
         # --- INTEGRAÇÃO ANALISTA IA ---
-        try:
-            self._feed_solar_analyst()
-        except Exception as e:
-            print(f"Erro no feed do analista: {e}")
+        # try:
+        #     self._feed_solar_analyst()
+        # except Exception as e:
+        #     print(f"Erro no feed do analista: {e}")
 
         self.after(1000, self._atualizar_em_tempo_real)
 
@@ -246,6 +252,7 @@ class SolarApp(tk.Tk):
             'mae': get_float(pp.mpp_outputs['meteo_mae']),
             'mape': float(pp.mpp_outputs['meteo_mape'].get().replace('%','')) if '%' in pp.mpp_outputs['meteo_mape'].get() else 0.0,
             'rmse': get_float(pp.mpp_outputs['meteo_rmse']),
+            'wape': float(pp.mpp_outputs['meteo_wape'].get().replace('%','')) if '%' in pp.mpp_outputs['meteo_wape'].get() else 0.0
         }
 
         # 2. Adicionar ao buffer
