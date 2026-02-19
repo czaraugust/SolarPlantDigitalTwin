@@ -16,8 +16,10 @@ from gui.pages.page_modelo_fv import PaginaPlantaSolar
 from gui.pages.page_potencia import PaginaPotencia
 from gui.pages.page_meteorologia import PaginaMeteorologia
 from gui.pages.page_previsao import PaginaPrevisao
+from gui.pages.page_previsao import PaginaPrevisao
 from gui.pages.page_conversao import PaginaConversao # <--- Import Nova Aba
 from gui.pages.page_analise import PaginaAnalise # <--- Import Nova Aba Análise
+from gui.pages.page_inversor import PaginaInversor # <--- Import Nova Aba Inversor
 
 # --- CONFIGURAÇÃO DE SIMULAÇÃO ---
 USA_DADOS_CSV = True  # Altere para True para usar dados do CSV
@@ -38,7 +40,10 @@ class SolarApp(tk.Tk):
             "irradiancia_ghi": tk.StringVar(value="850"),
             "albedo": tk.StringVar(value="0.2"),
             "tensao_real": tk.StringVar(value="0.0"),   # <--- NOVO
-            "corrente_real": tk.StringVar(value="0.0")  # <--- NOVO
+            "corrente_real": tk.StringVar(value="0.0"),  # <--- NOVO
+            "tensao_real_s2": tk.StringVar(value="0.0"), # <--- NOVO S2
+            "corrente_real_s2": tk.StringVar(value="0.0"),# <--- NOVO S2
+            "potencia_ac": tk.StringVar(value="0.0")     # <--- NOVO INVERSOR (AC)
         }
         self.dados_usina = {
             'modules_per_string': tk.StringVar(value="10"),
@@ -93,6 +98,7 @@ class SolarApp(tk.Tk):
 
         self.pagina_conversao = PaginaConversao(self.notebook, self) # Nova aba Conversão
         self.pagina_analise = PaginaAnalise(self.notebook, self) # Nova aba Análise
+        self.pagina_inversor = PaginaInversor(self.notebook, self) # Nova aba Inversor
         self.pagina_meteorologia = PaginaMeteorologia(self.notebook, self)
 
         # Adiciona as páginas como abas (Meteorologia é a segunda)
@@ -102,6 +108,7 @@ class SolarApp(tk.Tk):
         self.notebook.add(self.pagina_potencia, text="Potência")
         self.notebook.add(self.pagina_conversao, text="Conversão") # Nova aba Conversão
         self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
+        self.notebook.add(self.pagina_inversor, text="Inversor - Monitor") # Nova aba Inversor
         self.notebook.add(self.pagina_previsao, text="Previsão") # Nova aba
         self.notebook.add(self.pagina_analise, text="Análise") # Nova aba Análise
         
@@ -293,6 +300,7 @@ class SolarApp(tk.Tk):
             self.pagina_planta_solar.atualizar_modelo_pv()
             self.pagina_potencia.atualizar_modelo_pv()
             self.pagina_conversao.atualizar_conversao() # <--- Atualiza Conversão
+            self.pagina_inversor.atualizar_inversor()
             self.pagina_previsao.atualizar_previsao() # Atualiza previsao
             self.pagina_meteorologia.atualizar_meteorologia()
 
@@ -315,6 +323,8 @@ class SolarApp(tk.Tk):
             self.pagina_painel.reset_history(confirm=False)
         if hasattr(self, 'pagina_conversao'):
             self.pagina_conversao.reset_history(confirm=False)
+        if hasattr(self, 'pagina_inversor'):
+            self.pagina_inversor.reset_history(confirm=False)
         if hasattr(self, 'pagina_analise'):
             self.pagina_analise.reset_history(confirm=False)
 

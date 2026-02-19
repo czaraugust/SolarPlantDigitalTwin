@@ -39,14 +39,14 @@ class CsvPlayer:
             # --- FILTRO DE HORÁRIO (05:00 - 18:00) ---
             # Mantém apenas registros entre 05h e 18h
             self.df = self.df[
-                (self.df['Time'] >= "05:00:00") & 
-                (self.df['Time'] <= "18:00:00")
+                (self.df['Time'] >= "08:00:00") & 
+                (self.df['Time'] <= "16:00:00")
             ]
             
             # Reseta o índice
             self.df = self.df.reset_index(drop=True)
             self.current_index = 0
-            print(f"CSV carregado e filtrado (05:00-18:00): {len(self.df)} registros.")
+            print(f"CSV carregado e filtrado (08:00-16:00): {len(self.df)} registros.")
             return True
         except Exception as e:
             print(f"Erro ao carregar CSV: {e}")
@@ -169,10 +169,25 @@ class CsvPlayer:
                 self.app.editar_irradiancia_var.set(True)
 
             # 4. Atualiza Dados Reais (Tensão e Corrente)
+            # String 1
             if 'Voltage S1' in row:
                 self.app.dados_painel['tensao_real'].set(str(row['Voltage S1']))
             if 'Current S1' in row:
                 self.app.dados_painel['corrente_real'].set(str(row['Current S1']))
+            
+            # String 2
+            if 'Voltage S2' in row:
+                self.app.dados_painel['tensao_real_s2'].set(str(row['Voltage S2']))
+            if 'Current S2' in row:
+                self.app.dados_painel['corrente_real_s2'].set(str(row['Current S2']))
+
+            # Inversor (AC Power)
+            if 'Power' in row:
+                self.app.dados_painel['potencia_ac'].set(str(row['Power']))
+
+            # Força atualização dos cálculos
+            if 'Current S2' in row:
+                self.app.dados_painel['corrente_real_s2'].set(str(row['Current S2']))
 
             # Força atualização dos cálculos
             self.app.atualizar_calculos_e_telas()

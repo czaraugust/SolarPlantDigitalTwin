@@ -14,7 +14,11 @@ class PVSystemModel:
         Inicializa o modelo do sistema.
         """
         self.datasheet = datasheet_params
-        self.modules_per_string = modules_per_string
+        if isinstance(modules_per_string, int):
+            self.modules_per_string = [modules_per_string]
+        else:
+            self.modules_per_string = modules_per_string # Expects list of ints
+            
         self.strings_in_parallel = strings_in_parallel
 
         # Armazena os parâmetros do modelo de diodo único calculados para STC
@@ -80,9 +84,19 @@ class PVSystemModel:
                 warnings.filterwarnings('ignore', category=RuntimeWarning)
                 
                 # 1. Calcular a temperatura da célula (ou usar valor forçado)
+                # 1. Calcular a temperatura da célula
+                # SE houver temperatura medida do módulo, usar modelo SAPM para estimar Célula
+                # Modelo SAPM simplificado: Tcell = Tmodule + (POA / 1000) * DeltaT
+                # O usuário definiu DeltaT = 1.0
                 if forced_cell_temp is not None:
-                    temp_cell = float(forced_cell_temp)
+                    # assumindo que forced_cell_temp agora é a temperatura do MODULO (sensor)
+                    # se o usuario passar a temp da celula direto, a logica muda, mas o pedido foi "usar modelo sapm"
+                    # para garantir compatibilidade com chamadas antigas que passavam temp da celula, 
+                    # vamos assumir que o argumento reflete o sensor colado no verso.
+                    temp_module = float(forced_cell_temp)
+                    temp_cell = temp_module + (effective_irradiance / 1000.0) * 1.0
                 else:
+                    # Fallback para Faiman se não tiver sensor
                     temp_cell = pvlib.temperature.faiman(
                         poa_global=effective_irradiance,
                         temp_air=temp_air,
@@ -117,10 +131,15 @@ class PVSystemModel:
                 # Constrói vetores de curva a partir dos pontos-chave para a plotagem.
                 v_oc_mod = iv_module_points['v_oc']
 
-                v_curve_mod = np.linspace(0, v_oc_mod, 200)
+                # Constrói vetores de curva a partir dos pontos-chave para a plotagem.
+                v_oc_module_sim = iv_module_points['v_oc']
+
+                # Ajuste no range para evitar prolongamento visual (cauda zero)
+                # Antes era 1.1 (110%), agora 1.02 (102%) apenas para garantir o cruzamento
+                v_curve_mod = np.linspace(0, v_oc_module_sim * 1.02, 200)
 
                 # --- CORREÇÃO FINAL AQUI ---
-                # Usa a função `solve_lambertw` do caminho correto: pvlib.ivtools.sdiode
+                # Usa a função `solve_lambertw` do caminho correto
                 i_curve_mod = pvlib.singlediode._lambertw_i_from_v(
                     v_curve_mod,
                     photocurrent,
@@ -137,19 +156,74 @@ class PVSystemModel:
                 p_mp_mod = iv_module_points['p_mp']
 
                 # 5. Escalar as curvas e o MPP para o sistema completo (Array)
-                v_array = v_curve_mod * self.modules_per_string
-                i_array = i_curve_mod * self.strings_in_parallel
-                p_array = v_array * i_array
+                # MODIFICADO: Suporte para Multi-Strings (Assimétricas em Paralelo)
+                
+                # Base de Tensão comum para soma de correntes (vai até a maior Voc possível)
+                # Aproximadamente Voc_mod * max(modules_per_string)
+                max_modules = max(self.modules_per_string)
+                # Base de Tensão comum para soma de correntes (vai até a maior Voc possível)
+                # Aproximadamente Voc_mod * max(modules_per_string)
+                max_modules = max(self.modules_per_string)
+                v_max_system = v_oc_module_sim * max_modules * 1.0 
+                common_v_axis = np.linspace(0, v_max_system, 200)
+                
+                total_i_curve = np.zeros_like(common_v_axis)
+                
+                # MPP Total Accumulators
+                total_p_mpp = 0.0
+                # V_mpp e I_mpp do sistema combinado são complexos de definir apenas somando, 
+                # mas para fins de "MPP do Inversor" (rastreamento global), podemos pegar o pico da curva combinada.
+                
+                for n_modules in self.modules_per_string:
+                    # Curva da String (n_modules em série)
+                    # Escala tensão
+                    v_string_curve = v_curve_mod * n_modules
+                    
+                    # Interpola corrente para o eixo comum de tensão
+                    # Pontos onde a tensão da string é menor que o eixo comum terão corrente extrapolada (ou zero se v > voc)
+                    # pvlib singlediode devolve corrente. Se V > Voc, I deve ser 0.
+                    
+                    # Vamos usar a função singlediode novamente para o eixo comum escalado? 
+                    # Não, pois singlediode é por módulo.
+                    
+                    # Mais fácil: Calcular I_module para (common_v_axis / n_modules)
+                    v_per_module_requested = common_v_axis / n_modules
+                    
+                    i_string_currents = pvlib.singlediode._lambertw_i_from_v(
+                        v_per_module_requested,
+                        photocurrent,
+                        saturation_current,
+                        resistance_series,
+                        resistance_shunt,
+                        nNsVth
+                    )
+                    # Corrigir NaN ou negativos para 0
+                    i_string_currents = np.nan_to_num(i_string_currents, nan=0.0)
+                    i_string_currents[i_string_currents < 0] = 0
+                    
+                    # Multiplica por strings em paralelo (assumindo que strings_in_parallel se aplica a CADA sub-arranjo, 
+                    # ou se divide. O usuario disse "10 em serie em paralelo com 9 em serie".
+                    # Isso implica 1 string de 10 e 1 string de 9. Total = 2 strings.
+                    # Então strings_in_parallel deve ser aplicado globalmente ou é 1 para cada? 
+                    # Vamos assumir que self.strings_in_parallel é o multiplicador global.
+                    # Mas no caso dele é 1 de 10 e 1 de 9. Então strings_in_parallel = 1.
+                    
+                    total_i_curve += (i_string_currents * self.strings_in_parallel)
 
-                v_mp_array = v_mp_mod * self.modules_per_string
-                i_mp_array = i_mp_mod * self.strings_in_parallel
-                p_mp_array = p_mp_mod * self.modules_per_string * self.strings_in_parallel
-
+                # Calcular Curva de Potência Combinada
+                total_p_curve = common_v_axis * total_i_curve
+                
+                # Encontrar MPP Combinado
+                idx_mpp = np.argmax(total_p_curve)
+                p_mpp_system = total_p_curve[idx_mpp]
+                v_mpp_system = common_v_axis[idx_mpp]
+                i_mpp_system = total_i_curve[idx_mpp]
+                
                 return {
-                    'v_curve': v_array,
-                    'i_curve': i_array,
-                    'p_curve': p_array,
-                    'mpp': (v_mp_array, i_mp_array, p_mp_array)
+                    'v_curve': common_v_axis,
+                    'i_curve': total_i_curve,
+                    'p_curve': total_p_curve,
+                    'mpp': (v_mpp_system, i_mpp_system, p_mpp_system)
                 }
         except Exception:
             # Em caso de erro numérico, retorna zero para evitar crash

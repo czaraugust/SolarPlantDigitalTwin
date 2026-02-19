@@ -14,9 +14,15 @@ class PaginaConversao(ttk.Frame):
         # Armazena os dados do traço (histórico)
         self.trail_data = {
             'timestamps': [],
-            'fixo_irr': [],
-            'fixo_p': []
+            'timestamps': [],
+            'csv_irr': [],
+            'csv_irr': [],
+            'real_p': []
         }
+        
+        # Variáveis para exibição numérica
+        self.str_irr = tk.StringVar(value="0.0")
+        self.str_power = tk.StringVar(value="0.0")
         
         self._criar_widgets()
         
@@ -31,10 +37,22 @@ class PaginaConversao(ttk.Frame):
         btn_limpar = ttk.Button(
             top_frame, text="Reiniciar Gráfico", command=self.reset_history_ask)
         btn_limpar.pack(side="left")
+
+        # Frame de Métricas (Ao lado do botão limpar)
+        metrics_frame = ttk.Frame(top_frame)
+        metrics_frame.pack(side="right", padx=10)
+
+        # Irradiância
+        ttk.Label(metrics_frame, text="Irradiância (W/m²):", font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=(0, 5))
+        ttk.Label(metrics_frame, textvariable=self.str_irr, font=('TkDefaultFont', 9), width=8, relief="sunken", anchor="center").pack(side="left", padx=(0, 15))
+
+        # Potência
+        ttk.Label(metrics_frame, text="Potência (W):", font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=(0, 5))
+        ttk.Label(metrics_frame, textvariable=self.str_power, font=('TkDefaultFont', 9), width=8, relief="sunken", anchor="center").pack(side="left")
         
         # Container do Gráfico
         graph_frame = ttk.LabelFrame(
-            main_frame, text="Conversão: Irradiância x Potência (Painel Fixo)", padding=10)
+            main_frame, text="Conversão: Irradiância x Potência", padding=10)
         graph_frame.pack(fill="both", expand=True)
 
         self.fig = Figure(dpi=100)
@@ -49,8 +67,8 @@ class PaginaConversao(ttk.Frame):
 
     def _configurar_eixos(self):
         self.ax_irr.set_xlabel("Hora")
-        self.ax_irr.set_ylabel("Irradiância (W/m²)", color='orange')
-        self.ax_power.set_ylabel("Potência (W)", color='green')
+        self.ax_irr.set_ylabel("Irradiância Global (W/m²)", color='orange')
+        self.ax_power.set_ylabel("Potência Real (W)", color='green')
         
         self.ax_irr.tick_params(axis='y', labelcolor='orange')
         self.ax_power.tick_params(axis='y', labelcolor='green')
@@ -67,20 +85,32 @@ class PaginaConversao(ttk.Frame):
             if not solar:
                 return
 
-            # Coleta Irradiância do Painel Fixo (POA)
-            # A variável está em PaginaPainel.saidas_irradiancia
-            irr_fixo_str = self.controller.pagina_painel.saidas_irradiancia['POA_fixo_global'].get()
-            irr_fixo = float(irr_fixo_str) if irr_fixo_str else 0.0
+            # Coleta Irradiância Global (CSV)
+            irr_csv_str = self.controller.dados_painel['irradiancia_ghi'].get()
+            irr_csv = float(irr_csv_str) if irr_csv_str else 0.0
             
-            # Coleta Potência do Painel Fixo
-            # A variável está em PaginaPotencia.mpp_outputs
-            p_fixo_str = self.controller.pagina_potencia.mpp_outputs['fixo_p'].get()
-            p_fixo = float(p_fixo_str) if p_fixo_str else 0.0
+            # Coleta Dados Reais (Tensão e Corrente) para Potência Real (Dual String)
+            try:
+                v_real = float(self.controller.dados_painel['tensao_real'].get() or 0)
+                i_real = float(self.controller.dados_painel['corrente_real'].get() or 0)
+                
+                v_real_s2 = float(self.controller.dados_painel['tensao_real_s2'].get() or 0)
+                i_real_s2 = float(self.controller.dados_painel['corrente_real_s2'].get() or 0)
+                
+                p_real = (v_real * i_real) + (v_real_s2 * i_real_s2)
+            except ValueError:
+                p_real = 0.0
+
+            # Atualiza display numérico
+            self.str_irr.set(f"{irr_csv:.1f}")
+            self.str_power.set(f"{p_real:.1f}")
+
+            # Adiciona ao histórico
 
             # Adiciona ao histórico
             self.trail_data['timestamps'].append(solar.data_hora)
-            self.trail_data['fixo_irr'].append(irr_fixo)
-            self.trail_data['fixo_p'].append(p_fixo)
+            self.trail_data['csv_irr'].append(irr_csv)
+            self.trail_data['real_p'].append(p_real)
             
             self._atualizar_grafico()
             
@@ -95,26 +125,27 @@ class PaginaConversao(ttk.Frame):
         self._configurar_eixos()
 
         timestamps = self.trail_data['timestamps']
-        irradiances = self.trail_data['fixo_irr']
-        powers = self.trail_data['fixo_p']
+        timestamps = self.trail_data['timestamps']
+        irradiances = self.trail_data['csv_irr']
+        powers_real = self.trail_data['real_p']
         
         if timestamps:
             # Plot Irradiância (Eixo Esquerdo) - Laranja
             line1, = self.ax_irr.plot(
-                timestamps, irradiances, color='orange', label="Irradiância (Fixo)")
+                timestamps, irradiances, color='orange', label="Irradiância Real", linewidth=1.5)
             
-            # Plot Potência (Eixo Direito) - Verde
+            # Plot Potência Real (Eixo Direito) - Verde
             line2, = self.ax_power.plot(
-                timestamps, powers, color='green', label="Potência (Fixo)")
+                timestamps, powers_real, color='green', label="Potência Real", linewidth=1.5)
             
             # Formatação de Data no Eixo X
             self.ax_irr.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
             self.fig.autofmt_xdate()
             
-            # Legenda Unificada (opcional, mas bom pra clareza)
-            # lines = [line1, line2]
-            # labels = [l.get_label() for l in lines]
-            # self.ax_irr.legend(lines, labels, loc='upper left')
+            # Legenda Unificada
+            lines = [line1, line2]
+            labels = [l.get_label() for l in lines]
+            self.ax_irr.legend(lines, labels, loc='upper left')
 
         self.canvas.draw()
 
@@ -126,7 +157,7 @@ class PaginaConversao(ttk.Frame):
         # O argumento confirm é mantido para compatibilidade com a assinatura do app.py se necessário
         self.trail_data = {
             'timestamps': [],
-            'fixo_irr': [],
-            'fixo_p': []
+            'csv_irr': [],
+            'real_p': []
         }
         self._atualizar_grafico()

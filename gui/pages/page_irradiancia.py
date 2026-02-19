@@ -213,7 +213,7 @@ class PaginaPainel(ttk.Frame):
         self.ax_irradiancia.clear()
         if self.trail_data['timestamps']:
             self.ax_irradiancia.plot(
-                self.trail_data['timestamps'], self.trail_data['horizontal'], label="Painel Horizontal", color='blue', zorder=2)
+                self.trail_data['timestamps'], self.trail_data['horizontal'], label="Painel Horizontal (Real)", color='blue', zorder=2)
             self.ax_irradiancia.plot(
                 self.trail_data['timestamps'], self.trail_data['ideal'], label="Painel Ideal", color='red', zorder=2)
             self.ax_irradiancia.plot(

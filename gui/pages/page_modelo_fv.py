@@ -21,7 +21,7 @@ class PaginaPlantaSolar(ttk.Frame):
 
         self.editar_datasheet_var = tk.BooleanVar(value=False)
         # self.editar_ambientais_var = tk.BooleanVar(value=False) # Removido local
-        self.editar_usina_var = tk.BooleanVar(value=False)
+        # self.editar_usina_var = tk.BooleanVar(value=False) # REMOVIDO
 
         self.datasheet_widgets = []
         self.ambient_widgets = []
@@ -46,10 +46,9 @@ class PaginaPlantaSolar(ttk.Frame):
             "write", self._toggle_datasheet_edit_state)
         self.controller.editar_ambientais_var.trace_add(
             "write", self._toggle_ambient_edit_state)
-        self.editar_usina_var.trace_add("write", self._toggle_usina_edit_state)
         self._toggle_datasheet_edit_state()
         self._toggle_ambient_edit_state()
-        self._toggle_usina_edit_state()
+        # self._toggle_usina_edit_state()
         self._toggle_edit_state()
 
     def _toggle_edit_state(self, *args):
@@ -72,10 +71,10 @@ class PaginaPlantaSolar(ttk.Frame):
         for widget in self.ambient_widgets:
             widget.config(state=state)
 
-    def _toggle_usina_edit_state(self, *args):
-        state = "normal" if self.editar_usina_var.get() else "disabled"
-        for widget in self.usina_widgets:
-            widget.config(state=state)
+    # def _toggle_usina_edit_state(self, *args):
+    #     state = "normal" if self.editar_usina_var.get() else "disabled"
+    #     for widget in self.usina_widgets:
+    #         widget.config(state=state)
 
     def _on_ambient_slider_move(self, key, value_str):
         value = float(value_str)
@@ -182,25 +181,8 @@ class PaginaPlantaSolar(ttk.Frame):
         wind_slider.bind(
             "<KeyPress-Right>", lambda e: self._handle_ambient_arrow_key('wind_speed', 1, 0, 50, e))
 
-        arr_frame = ttk.LabelFrame(
-            left_col, text="Configuração da Usina", padding=5)
-        arr_frame.pack(fill="x", pady=3)
-
-        cb_usina = ttk.Checkbutton(
-            arr_frame, text="Editar Configuração", variable=self.editar_usina_var, style="Compact.TCheckbutton")
-        cb_usina.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 3))
-
-        arr_labels = {
-            'modules_per_string': "Módulos em Série:", 'strings_in_parallel': "Strings em Paralelo:"}
-        for i, (key, text) in enumerate(arr_labels.items(), start=1):
-            ttk.Label(arr_frame, text=text, style="Compact.TLabel").grid(
-                row=i, column=0, sticky="w", pady=1)
-            entry = ttk.Entry(
-                arr_frame, textvariable=self.array_vars[key], width=15, font=('TkDefaultFont', 6))
-            entry.grid(row=i, column=1, sticky="e", padx=5, pady=1)
-            entry.bind("<KeyRelease>",
-                       lambda e: self.controller.atualizar_calculos_e_telas())
-            self.usina_widgets.append(entry)
+        # Configuração da Usina REMOVIDO
+        # arr_frame = ttk.LabelFrame(...)
 
         right_col = ttk.Frame(main_frame)
         right_col.pack(side="left", fill="both", expand=True, padx=10)
@@ -232,7 +214,7 @@ class PaginaPlantaSolar(ttk.Frame):
         mpp_frame.pack(fill="x", pady=10)
 
         headers = [
-            "Cenário", "Irradiância (W/m²)", "Tensão (V)", "Corrente (A)", "Potência (W)", "Ganho/Perda (%)"]
+            "Cenário", "Irradiância (W/m²)", "Tensão (V) - S1", "Corrente (A)", "Potência (W) - S1+S2", "Ganho/Perda (%)"]
         for col, text in enumerate(headers):
             ttk.Label(mpp_frame, text=text, font=('TkDefaultFont', 6, 'bold')).grid(
                 row=0, column=col, padx=5, sticky="w")
@@ -267,8 +249,10 @@ class PaginaPlantaSolar(ttk.Frame):
             stc_results = self.cached_stc_results
 
             if current_static_inputs != self.cached_static_inputs:
+                # --- SINGLE MODULE MODE ---
+                # "quero que na verdade as curvas de operação sejam apenas de um painel"
                 pv_system = PVSystemModel(
-                    datasheet, array_config['modules_per_string'], array_config['strings_in_parallel'])
+                    datasheet, [1], 1)
                 stc_results = pv_system.calculate_curves_and_mpp(
                     poa_global=1000, temp_air=25, wind_speed=0)
 
@@ -313,18 +297,27 @@ class PaginaPlantaSolar(ttk.Frame):
                          'fixo': irr_fixo, 'horiz': irr_horiz}
             colors = {'ideal': 'red', 'fixo': 'orange', 'horiz': 'blue'}
 
+            # Retrieve Sensor Temp for SAPM
+            temp_sensor = 0.0
+            if hasattr(self.controller, 'pagina_meteorologia'):
+                pm = self.controller.pagina_meteorologia
+                if hasattr(pm, 'meteo_vars'):
+                     val = pm.meteo_vars['temp_painel'].get()
+                     if val:
+                        temp_sensor = float(val)
+
             p_ideal = 0.0
             if scenarios['ideal'] > 0:
                  # Calculate ideal first to be base
                 results_ideal = pv_system.calculate_curves_and_mpp(
-                        scenarios['ideal'], ambient['temp_air'], ambient['wind_speed'])
+                        scenarios['ideal'], ambient['temp_air'], ambient['wind_speed'], forced_cell_temp=temp_sensor)
                 _, _, p_ideal_val = results_ideal['mpp']
                 p_ideal = p_ideal_val
 
             for prefix, irr_value in scenarios.items():
                 if irr_value > 0:
                     results = pv_system.calculate_curves_and_mpp(
-                        irr_value, ambient['temp_air'], ambient['wind_speed'])
+                        irr_value, ambient['temp_air'], ambient['wind_speed'], forced_cell_temp=temp_sensor)
                     v_mp, i_mp, p_mp = results['mpp']
 
                     self.mpp_outputs[f"{prefix}_irr"].set(f"{irr_value:.2f}")
@@ -356,10 +349,28 @@ class PaginaPlantaSolar(ttk.Frame):
                              self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00%")
 
             # --- DADOS REAIS ---
-            v_real = float(self.controller.dados_painel['tensao_real'].get() or 0)
-            i_real = float(self.controller.dados_painel['corrente_real'].get() or 0)
-            p_real = (v_real * i_real)
+            # --- DADOS REAIS (Normalizados por Módulo) ---
+            v_real_s1 = float(self.controller.dados_painel['tensao_real'].get() or 0)
+            i_real_s1 = float(self.controller.dados_painel['corrente_real'].get() or 0)
             
+            v_real_s2 = float(self.controller.dados_painel['tensao_real_s2'].get() or 0)
+            i_real_s2 = float(self.controller.dados_painel['corrente_real_s2'].get() or 0)
+
+            # Normalização para 1 Painel
+            # String 1: 10 painéis
+            v_mod_s1 = v_real_s1 / 10 if v_real_s1 > 0 else 0
+            p_mod_s1 = v_mod_s1 * i_real_s1
+            
+            # String 2: 9 painéis
+            v_mod_s2 = v_real_s2 / 9 if v_real_s2 > 0 else 0
+            p_mod_s2 = v_mod_s2 * i_real_s2
+            
+            # Para a tabela, vamos mostrar a Média dos dois ou apenas S1?
+            # Vamos mostrar a média ponderada ou simples
+            v_real = (v_mod_s1 + v_mod_s2) / 2
+            i_real = (i_real_s1 + i_real_s2) / 2
+            p_real = (p_mod_s1 + p_mod_s2) / 2 # Média de Potência por Módulo
+
             # Irradiância Real (pode ser GHI global ou fixa, dependendo do sensor, aqui vamos assumir GHI global como ref ou vazia)
             # Na verdade o CSV tem 'Irradiance'. Vamos usar GHI Global mesmo para referência.
             irr_real = irr_horiz # Assume GHI como ref visual
@@ -376,11 +387,15 @@ class PaginaPlantaSolar(ttk.Frame):
                  self.mpp_outputs['real_gain'].set("0.00%")
 
             if is_visible:
-                # Plot Ponto Real (Preto)
-                self.ax_iv.plot(v_real, i_real, 'o', color='black', markersize=6, label="Real", zorder=5)
-                self.ax_pv.plot(v_real, p_real, 'o', color='black', markersize=6, label="Real", zorder=5)
+                # Plot Ponto Real S1 (Preto)
+                self.ax_iv.plot(v_mod_s1, i_real_s1, 'o', color='black', markersize=6, label="Real S1", zorder=5)
+                self.ax_pv.plot(v_mod_s1, p_mod_s1, 'o', color='black', markersize=6, label="Real S1", zorder=5)
+                
+                # Plot Ponto Real S2 REMOVIDO a pedido
+                # self.ax_iv.plot(v_mod_s2, i_real_s2, '^', color='gray', markersize=6, label="Real S2", zorder=5)
+                # self.ax_pv.plot(v_mod_s2, p_mod_s2, '^', color='gray', markersize=6, label="Real S2", zorder=5)
     
-                self.ax_iv.set_title("Curva Corrente x Tensão")
+                self.ax_iv.set_title("Curva Corrente x Tensão-String 1")
                 self.ax_iv.set_xlabel("Tensão (V)")
                 self.ax_iv.set_ylabel("Corrente (A)")
                 self.ax_iv.grid(True)
@@ -388,7 +403,7 @@ class PaginaPlantaSolar(ttk.Frame):
                 self.fig_iv.tight_layout()
                 self.canvas_iv.draw()
     
-                self.ax_pv.set_title("Curva Potência x Tensão")
+                self.ax_pv.set_title("Curva Potência x Tensão-String 1")
                 self.ax_pv.set_xlabel("Tensão (V)")
                 self.ax_pv.set_ylabel("Potência (W)")
                 self.ax_pv.grid(True)

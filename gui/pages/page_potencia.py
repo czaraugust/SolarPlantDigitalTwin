@@ -30,7 +30,7 @@ class PaginaPotencia(ttk.Frame):
         # mas os valores (StringVar) centralizados.
         # Mas para garantir sync total, melhor usar variaveis do controller se possivel.
         # No app.py eu adicionei editar_ambientais_var.
-        self.editar_usina_var = tk.BooleanVar(value=False)
+        # self.editar_usina_var = tk.BooleanVar(value=False) # Removido
 
         self.datasheet_widgets = []
         self.ambient_widgets = []
@@ -56,10 +56,9 @@ class PaginaPotencia(ttk.Frame):
             "write", self._toggle_datasheet_edit_state)
         self.controller.editar_ambientais_var.trace_add(
             "write", self._toggle_ambient_edit_state)
-        self.editar_usina_var.trace_add("write", self._toggle_usina_edit_state)
         self._toggle_datasheet_edit_state()
         self._toggle_ambient_edit_state()
-        self._toggle_usina_edit_state()
+        # self._toggle_usina_edit_state()
         self._toggle_edit_state()
 
     def _toggle_edit_state(self, *args):
@@ -82,10 +81,10 @@ class PaginaPotencia(ttk.Frame):
         for widget in self.ambient_widgets:
             widget.config(state=state)
 
-    def _toggle_usina_edit_state(self, *args):
-        state = "normal" if self.editar_usina_var.get() else "disabled"
-        for widget in self.usina_widgets:
-            widget.config(state=state)
+    # def _toggle_usina_edit_state(self, *args):
+    #     state = "normal" if self.editar_usina_var.get() else "disabled"
+    #     for widget in self.usina_widgets:
+    #         widget.config(state=state)
 
     def _on_ambient_slider_move(self, key, value_str):
         value = float(value_str)
@@ -204,25 +203,8 @@ class PaginaPotencia(ttk.Frame):
         wind_slider.bind(
             "<KeyPress-Right>", lambda e: self._handle_ambient_arrow_key('wind_speed', 1, 0, 50, e))
 
-        arr_frame = ttk.LabelFrame(
-            left_col, text="Configuração da Usina", padding=5)
-        arr_frame.pack(fill="x", pady=3)
-        
-        cb_usina = ttk.Checkbutton(
-            arr_frame, text="Editar Configuração", variable=self.editar_usina_var, style="Compact.TCheckbutton")
-        cb_usina.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 3))
-
-        arr_labels = {
-            'modules_per_string': "Módulos em Série:", 'strings_in_parallel': "Strings em Paralelo:"}
-        for i, (key, text) in enumerate(arr_labels.items(), start=1):
-            ttk.Label(arr_frame, text=text, style="Compact.TLabel").grid(
-                row=i, column=0, sticky="w", pady=1)
-            entry = ttk.Entry(
-                arr_frame, textvariable=self.array_vars[key], width=15, font=('TkDefaultFont', 6))
-            entry.grid(row=i, column=1, sticky="e", padx=5, pady=1)
-            entry.bind("<KeyRelease>",
-                       lambda e: self.controller.atualizar_calculos_e_telas())
-            self.usina_widgets.append(entry)
+        # Configuração da Usina REMOVIDO
+        # arr_frame = ttk.LabelFrame(...)
             
         # Botão limpar gráfico
         btn_limpar = ttk.Button(
@@ -246,7 +228,7 @@ class PaginaPotencia(ttk.Frame):
         mpp_frame.pack(fill="x", pady=10)
 
         headers = [
-            "Cenário", "Irradiância (W/m²)", "Tensão (V)", "Corrente (A)", "Potência (W)", "Ganho/Perda (%)"]
+            "Cenário", "Irradiância (W/m²)", "Tensão (V) - S1", "Corrente (A)", "Potência (W) - S1+S2", "Ganho/Perda (%)"]
         for col, text in enumerate(headers):
             ttk.Label(mpp_frame, text=text, font=('TkDefaultFont', 6, 'bold')).grid(
                 row=0, column=col, padx=5, sticky="w")
@@ -272,8 +254,14 @@ class PaginaPotencia(ttk.Frame):
             datasheet['cells_in_series'] = int(datasheet['cells_in_series'])
 
             ambient = {k: float(v.get()) for k, v in self.ambient_vars.items()}
-            array_config = {k: int(v.get())
-                            for k, v in self.array_vars.items()}
+            # array_config = {k: int(v.get())
+            #                 for k, v in self.array_vars.items()}
+            
+            # --- CONFIGURAÇÃO DUAL-STRING FORÇADA (10s || 9s) ---
+            array_config = {
+                'modules_per_string': [10, 9],
+                'strings_in_parallel': 1
+            }
 
             current_static_inputs = {**datasheet, **array_config}
             
@@ -337,10 +325,14 @@ class PaginaPotencia(ttk.Frame):
                         self.mpp_outputs[f"{prefix}_{key_suffix}"].set("0.00")
 
             
-            # --- DADOS REAIS ---
+            # --- DADOS REAIS (Dual String) ---
             v_real = float(self.controller.dados_painel['tensao_real'].get() or 0)
             i_real = float(self.controller.dados_painel['corrente_real'].get() or 0)
-            p_real = (v_real * i_real) # W
+            
+            v_real_s2 = float(self.controller.dados_painel['tensao_real_s2'].get() or 0)
+            i_real_s2 = float(self.controller.dados_painel['corrente_real_s2'].get() or 0)
+
+            p_real = (v_real * i_real) + (v_real_s2 * i_real_s2) # W (Soma das potências)
             
             # Irradiância Real (Reference)
             irr_real = irr_horiz
@@ -376,25 +368,25 @@ class PaginaPotencia(ttk.Frame):
                 irr_poa = irr_fixo # Usamos a irradiância no plano fixo como referência
                 t_amb = ambient['temp_air']
                 wind = ambient['wind_speed']
-                
-                temp_faiman = pvlib.temperature.faiman(irr_poa, t_amb, wind)
-                
+
                 # 2. Pegar Temp Sensor (Real/Slider Meteorologia)
                 temp_sensor = 0.0
                 if hasattr(self.controller, 'pagina_meteorologia'):
                     pm = self.controller.pagina_meteorologia
                     if hasattr(pm, 'meteo_vars'):
-                        temp_sensor = float(pm.meteo_vars['temp_painel'].get())
+                        val = pm.meteo_vars['temp_painel'].get()
+                        if val:
+                            temp_sensor = float(val)
                 
-                # 3. Comparar e Printar
-                diff_perc = 0.0
-                if temp_sensor != 0:
-                    diff_perc = ((temp_faiman - temp_sensor) / temp_sensor) * 100
-                
-                print(f"[MODELO TÉRMICO] Calc(Faiman): {temp_faiman:.1f}°C | Real(Sensor): {temp_sensor:.1f}°C | Diff: {diff_perc:+.1f}%")
+                # Modelo SAPM (Simulado com Sensor)
+                # Tcell = Tsensor + (POA/1000)*1
+                # Para efeito de debug, vamos calcular o SAPM aqui
+                temp_sapm = temp_sensor + (irr_poa / 1000.0) * 1.0
+
+                # print(f"[MODELO TÉRMICO] Calc(SAPM): {temp_sapm:.1f}°C | Sensor(Módulo): {temp_sensor:.1f}°C | Faiman(Amb): {temp_faiman:.1f}°C")
                 
             except Exception as e:
-                print(f"Erro ao comparar temperaturas: {e}")
+                pass # print(f"Erro ao comparar temperaturas: {e}")
 
         except Exception:
             traceback.print_exc()
