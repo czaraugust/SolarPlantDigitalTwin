@@ -23,11 +23,15 @@ class PaginaPrevisao(ttk.Frame):
         
         # Armazena os dados do traço (histórico)
         self.trail_data = {'timestamps': [],
-                           'modelo': [], 'real': []}
+                           'modelo': [], 'modelo_raw': [], 'real': []}
         
         # Dados para calculo de erros acumulados
         self.error_stats = {
             'modelo': {
+                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
+                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
+            },
+            'modelo_raw': {
                 'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
                 'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
             },
@@ -49,12 +53,16 @@ class PaginaPrevisao(ttk.Frame):
         self.ambient_vars = self.controller.dados_ambientais
         self.array_vars = self.controller.dados_usina
         
-        # Outputs da tabela de comparação
         self.mpp_outputs = {
             'modelo_p': tk.StringVar(), 
             'modelo_mse': tk.StringVar(), 'modelo_mae': tk.StringVar(), 
             'modelo_rmse': tk.StringVar(), 'modelo_mape': tk.StringVar(),
             'modelo_wape': tk.StringVar(),
+            
+            'modelo_raw_p': tk.StringVar(), 
+            'modelo_raw_mse': tk.StringVar(), 'modelo_raw_mae': tk.StringVar(), 
+            'modelo_raw_rmse': tk.StringVar(), 'modelo_raw_mape': tk.StringVar(),
+            'modelo_raw_wape': tk.StringVar(),
             
             'real_p': tk.StringVar(), 
             'real_mse': tk.StringVar(), 'real_mae': tk.StringVar(), 
@@ -126,14 +134,7 @@ class PaginaPrevisao(ttk.Frame):
                 return
 
         self.trail_data = {'timestamps': [],
-                           'modelo': [], 'real': []}
-        
-        # Reset de todas as estatísticas de erro
-        for k in self.error_stats:
-            self.error_stats[k] = {
-                'sum_sq_err': 0.0, 'sum_abs_err': 0.0,
-                'sum_abs_perc': 0.0, 'sum_real': 0.0, 'count': 0, 'count_mape': 0
-            }
+                           'modelo': [], 'modelo_raw': [], 'real': []}
         
         self._atualizar_grafico_previsao()
 
@@ -331,15 +332,17 @@ class PaginaPrevisao(ttk.Frame):
 
             # Cenários de Cálculo
             # 1. modelo: Usa Temp Painel (sensor/simulado) e Irradiância
-            scenarios = {}
+            scenarios = {'modelo': 0.0, 'modelo_raw': 0.0}
             
             # --- CÁLCULO MODELO (SAPM DEFAULT) ---
             if irr_fixo > 0:
                 res_modelo = pv_system.calculate_curves_and_mpp(
                     irr_fixo, 25.0, 1.0, forced_cell_temp=temp_painel_sensor) # forced_cell_temp agora aciona SAPM
-                scenarios['modelo'] = res_modelo['mpp'][2] # Power
+                scenarios['modelo'] = res_modelo['mpp'][2] # Power (M4 corrected)
+                scenarios['modelo_raw'] = res_modelo.get('mpp_raw', res_modelo['mpp'][2])  # Raw (sem M4)
             else:
                 scenarios['modelo'] = 0.0
+                scenarios['modelo_raw'] = 0.0
 
             # --- DADOS REAIS (REFERÊNCIA) ---
             # --- DADOS REAIS (REFERÊNCIA - DUAL STRING) ---
@@ -415,6 +418,7 @@ class PaginaPrevisao(ttk.Frame):
                 if not self.trail_data['timestamps'] or current_time > self.trail_data['timestamps'][-1]:
                     self.trail_data['timestamps'].append(current_time)
                     self.trail_data['modelo'].append(scenarios['modelo'])
+                    self.trail_data['modelo_raw'].append(scenarios['modelo_raw'])
                     self.trail_data['real'].append(p_real)
                     
                     # LOG DE TEMPERATURAS PARA DEBUG
@@ -428,6 +432,7 @@ class PaginaPrevisao(ttk.Frame):
                     if len(self.trail_data['timestamps']) > 3600:
                         self.trail_data['timestamps'].pop(0)
                         self.trail_data['modelo'].pop(0)
+                        self.trail_data['modelo_raw'].pop(0)
                         self.trail_data['real'].pop(0)
                 
             self._atualizar_grafico_previsao()
@@ -444,8 +449,8 @@ class PaginaPrevisao(ttk.Frame):
         if self.trail_data['timestamps']:
             ts = self.trail_data['timestamps']
             
-            # Modelo (Main line)
-            self.ax_power.plot(ts, self.trail_data['modelo'], label="MODELO", color='blue', zorder=2)
+            # Modelo
+            self.ax_power.plot(ts, self.trail_data['modelo'], label="MODELO", color='blue', zorder=3)
             
             # Real (Black)
             self.ax_power.plot(ts, self.trail_data['real'], label="REAL", color='black', alpha=0.8, linewidth=2, zorder=1)

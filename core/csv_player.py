@@ -39,8 +39,8 @@ class CsvPlayer:
             # --- FILTRO DE HORÁRIO (05:00 - 18:00) ---
             # Mantém apenas registros entre 05h e 18h
             self.df = self.df[
-                (self.df['Time'] >= "08:00:00") & 
-                (self.df['Time'] <= "16:00:00")
+                (self.df['Time'] >= "05:00:00") & 
+                (self.df['Time'] <= "18:00:00")
             ]
             
             # Reseta o índice

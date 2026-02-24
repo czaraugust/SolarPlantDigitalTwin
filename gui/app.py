@@ -20,6 +20,7 @@ from gui.pages.page_previsao import PaginaPrevisao
 from gui.pages.page_conversao import PaginaConversao # <--- Import Nova Aba
 from gui.pages.page_analise import PaginaAnalise # <--- Import Nova Aba Análise
 from gui.pages.page_inversor import PaginaInversor # <--- Import Nova Aba Inversor
+from gui.pages.page_inversor_simulado import PaginaInversorSimulado # <--- Import Inversor Simulado
 
 # --- CONFIGURAÇÃO DE SIMULAÇÃO ---
 USA_DADOS_CSV = True  # Altere para True para usar dados do CSV
@@ -99,18 +100,20 @@ class SolarApp(tk.Tk):
         self.pagina_conversao = PaginaConversao(self.notebook, self) # Nova aba Conversão
         self.pagina_analise = PaginaAnalise(self.notebook, self) # Nova aba Análise
         self.pagina_inversor = PaginaInversor(self.notebook, self) # Nova aba Inversor
+        self.pagina_inversor_sim = PaginaInversorSimulado(self.notebook, self) # Nova aba Inversor Simulado
         self.pagina_meteorologia = PaginaMeteorologia(self.notebook, self)
 
         # Adiciona as páginas como abas (Meteorologia é a segunda)
         self.notebook.add(self.pagina_grafico, text="Posição Solar")
-        self.notebook.add(self.pagina_meteorologia, text="Meteorologia") # <--- AQUI
+        self.notebook.add(self.pagina_meteorologia, text="Meteorologia")
         self.notebook.add(self.pagina_painel, text="Irradiância")
         self.notebook.add(self.pagina_potencia, text="Potência")
-        self.notebook.add(self.pagina_conversao, text="Conversão") # Nova aba Conversão
+        self.notebook.add(self.pagina_conversao, text="Conversão")
         self.notebook.add(self.pagina_planta_solar, text="Curvas de Operação")
-        self.notebook.add(self.pagina_inversor, text="Inversor - Monitor") # Nova aba Inversor
-        self.notebook.add(self.pagina_previsao, text="Previsão") # Nova aba
-        self.notebook.add(self.pagina_analise, text="Análise") # Nova aba Análise
+        self.notebook.add(self.pagina_previsao, text="Previsão")
+        self.notebook.add(self.pagina_inversor, text="Inversor - Monitor")
+        self.notebook.add(self.pagina_inversor_sim, text="Inversor - Simulado")
+        self.notebook.add(self.pagina_analise, text="Análise")
         
         # OTIMIZAÇÃO: Atualizar aba ao mudar o foco (pois paramos de desenhar quando escondida)
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
@@ -301,6 +304,7 @@ class SolarApp(tk.Tk):
             self.pagina_potencia.atualizar_modelo_pv()
             self.pagina_conversao.atualizar_conversao() # <--- Atualiza Conversão
             self.pagina_inversor.atualizar_inversor()
+            self.pagina_inversor_sim.atualizar_inversor_simulado()
             self.pagina_previsao.atualizar_previsao() # Atualiza previsao
             self.pagina_meteorologia.atualizar_meteorologia()
 
@@ -325,6 +329,8 @@ class SolarApp(tk.Tk):
             self.pagina_conversao.reset_history(confirm=False)
         if hasattr(self, 'pagina_inversor'):
             self.pagina_inversor.reset_history(confirm=False)
+        if hasattr(self, 'pagina_inversor_sim'):
+            self.pagina_inversor_sim.reset_history(confirm=False)
         if hasattr(self, 'pagina_analise'):
             self.pagina_analise.reset_history(confirm=False)
 
@@ -358,6 +364,7 @@ class SolarApp(tk.Tk):
             pages = [
                 self.pagina_grafico, self.pagina_meteorologia, self.pagina_painel,
                 self.pagina_potencia, self.pagina_conversao, self.pagina_planta_solar,
+                self.pagina_inversor, self.pagina_inversor_sim,
                 self.pagina_previsao, self.pagina_analise
             ]
             
@@ -377,12 +384,18 @@ class SolarApp(tk.Tk):
                         page.atualizar_conversao()
                     elif hasattr(page, 'atualizar_previsao'):
                         page.atualizar_previsao()
+                    elif hasattr(page, 'atualizar_inversor_simulado'):
+                        page.atualizar_inversor_simulado()
+                    elif hasattr(page, 'atualizar_inversor'):
+                        page.atualizar_inversor()
                         
                     # Se tiver grafico historico, força redraw tb
                     if hasattr(page, '_atualizar_grafico_potencia'):
                         page._atualizar_grafico_potencia()
                     if hasattr(page, '_atualizar_grafico_previsao'):
                         page._atualizar_grafico_previsao()
+                    if hasattr(page, '_atualizar_grafico'):
+                        page._atualizar_grafico()
                     if hasattr(page, '_plot_graphs'):
                         page._plot_graphs()
                         

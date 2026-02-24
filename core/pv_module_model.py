@@ -9,6 +9,16 @@ class PVSystemModel:
     com strings em série e paralelo, usando a biblioteca pvlib.
     """
 
+    # Coeficientes de correção M4 (ajustados por regressão no dataset real)
+    # P_corr = a*P_pred + b*POA + c*Temp + d*POA*Temp + e
+    M4_COEFS = {
+        'a': 6.263008,
+        'b': -30.290082,
+        'c': -1.811529,
+        'd': 0.117656,
+        'e': 72.7470
+    }
+
     def __init__(self, datasheet_params, modules_per_string, strings_in_parallel):
         """
         Inicializa o modelo do sistema.
@@ -69,7 +79,8 @@ class PVSystemModel:
                     'v_curve': np.zeros(200),
                     'i_curve': np.zeros(200),
                     'p_curve': np.zeros(200),
-                    'mpp': (0.0, 0.0, 0.0)
+                    'mpp': (0.0, 0.0, 0.0),
+                    'mpp_raw': 0.0
                 }
             
             # --- PROTEÇÃO CONTRA OVERFLOW ---
@@ -218,12 +229,34 @@ class PVSystemModel:
                 p_mpp_system = total_p_curve[idx_mpp]
                 v_mpp_system = common_v_axis[idx_mpp]
                 i_mpp_system = total_i_curve[idx_mpp]
-                
+
+                # --- CORREÇÃO M4 (Regressão Multivariável) ---
+                # M4 foi treinado com p_mp_modulo * 19 módulos.
+                # Só aplica se a config atual bate com a do treinamento.
+                total_modules = sum(self.modules_per_string)
+                M4_TOTAL_MODULES = 19  # Config do treinamento
+
+                if total_modules == M4_TOTAL_MODULES:
+                    p_simple = p_mp_mod * total_modules
+                    poa = effective_irradiance
+                    temp_mod = forced_cell_temp if forced_cell_temp is not None else temp_cell
+                    c = self.M4_COEFS
+                    p_mpp_corrected = (c['a'] * p_simple + 
+                                       c['b'] * poa + 
+                                       c['c'] * temp_mod + 
+                                       c['d'] * poa * temp_mod + 
+                                       c['e'])
+                    p_mpp_corrected = max(0.0, p_mpp_corrected)
+                else:
+                    # Config diferente do treinamento — usa MPP direto
+                    p_mpp_corrected = p_mpp_system
+
                 return {
                     'v_curve': common_v_axis,
                     'i_curve': total_i_curve,
                     'p_curve': total_p_curve,
-                    'mpp': (v_mpp_system, i_mpp_system, p_mpp_system)
+                    'mpp': (v_mpp_system, i_mpp_system, p_mpp_corrected),
+                    'mpp_raw': p_mpp_system
                 }
         except Exception:
             # Em caso de erro numérico, retorna zero para evitar crash
@@ -231,5 +264,6 @@ class PVSystemModel:
                 'v_curve': np.zeros(200),
                 'i_curve': np.zeros(200),
                 'p_curve': np.zeros(200),
-                'mpp': (0.0, 0.0, 0.0)
+                'mpp': (0.0, 0.0, 0.0),
+                'mpp_raw': 0.0
             }

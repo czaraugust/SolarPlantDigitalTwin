@@ -76,14 +76,16 @@ def run_analysis():
     # Conversão de Unidades e Limpeza
     df['Wind Speed'] = pd.to_numeric(df['Wind Speed'], errors='coerce') / 3.6
     
-    cols_to_numeric = ['Amb. Temperature', 'Irradiance', 'PV Temperature', 'Voltage S1', 'Current S1']
+    cols_to_numeric = ['Amb. Temperature', 'Irradiance', 'PV Temperature', 
+                       'Voltage S1', 'Current S1', 'Voltage S2', 'Current S2', 'Power']
     for col in cols_to_numeric:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     
     df = df.dropna(subset=cols_to_numeric + ['Wind Speed'])
     
-    # Potência Real (DC)
-    df['P_real'] = df['Voltage S1'] * df['Current S1']
+    # Potência Real (DC Total = S1 + S2)
+    # Assumindo que NaN em S2 seja 0 se não existir, mas o dropna acima já limpa.
+    df['P_real'] = (df['Voltage S1'] * df['Current S1']) + (df['Voltage S2'] * df['Current S2'])
     
     # --- CÁLCULO SOLAR E IRRADIANCIA (CUSTOM LOOP) ---
     print(f"Iniciando cálculos solares e de irradiância (Custom Calculators) para {len(df)} registros...")
@@ -229,7 +231,7 @@ def run_analysis():
     for day in unique_dates:
         day_str = str(day)
         day_df = analysis_df[analysis_df.index.date == day]
-        day_valid = day_df[day_df['P_real'] > 5.0]
+        day_valid = day_df[day_df['P_real'] > 10.0]
         
         for m in models:
             col = f'P_{m.lower()}'
@@ -282,6 +284,57 @@ def run_analysis():
         print(f"Resultados finais salvos em: {os.path.abspath(OUTPUT_TOTAL)}")
         print("\n--- RESUMO FINAL ---")
         print(final_df[['Model', 'RMSE', 'MAE', 'MAPE', 'WAPE']].to_string(index=False))
+
+    # --- ANÁLISE DE SOBRECARGA (> 5000W) ---
+    print("\n--- ANÁLISE DE SOBRECARGA (> 5000W) ---")
+    THRESHOLD = 5000.0
+    
+    # Filtrar momentos de sobrecarga
+    overpower_df = df[df['P_real'] > THRESHOLD].copy()
+    
+    if len(overpower_df) > 0:
+        # 1. Duração Total (Minutos)
+        # Assumindo que cada linha é 1 minuto (amostragem típica). 
+        # Se for diferente, precisaria calcular delta T real.
+        # Vamos calcular delta T médio para confirmar
+        time_diffs = df.index.to_series().diff().dt.total_seconds() / 60.0
+        avg_step = time_diffs.median() # Passo médio em minutos
+        
+        minutes_over = len(overpower_df) * avg_step # Aproximação baseada no passo
+        
+        # 2. Energia Excedente (Wh)
+        # Energia = Potência * Tempo
+        # Excedente = (P_real - 5000) * (avg_step / 60 horas)
+        power_excess = overpower_df['P_real'] - THRESHOLD
+        energy_excess_wh = (power_excess * (avg_step / 60.0)).sum()
+        
+        # Energia Total Gerada acima de 5000 (não só o excedente, mas a energia total nesses momentos? 
+        # O usuario pediu "quanta potencia acima de 5000 foi gerada". 
+        # Isso geralmente significa a INTEGRAL DA PARTE EXCEDENTE (clipped).
+        # "quanta energia" seria o termo correto, mas "potencia gerada" pode ser interpretado. 
+        # Vou entregar a Energia Excedente (Wh).
+        
+        print(f"Limite de Potência: {THRESHOLD} W")
+        print(f"Duração Total Acima do Limite: {minutes_over:.1f} minutos")
+        print(f"Energia Excedente Gerada: {energy_excess_wh:.2f} Wh")
+        print(f"Pico de Potência Registrado: {overpower_df['P_real'].max():.2f} W")
+    else:
+        print(f"Nenhum registro de potência acima de {THRESHOLD} W foi encontrado.")
+
+    # --- EXPORTAÇÃO DE EFICIÊNCIA ---
+    print("\nGerando CSV de Eficiência...")
+    # Eficiência = (Potência AC / Potência DC) * 100
+    # Evitar divisão por zero
+    df['Efficiency'] = np.where(df['P_real'] > 10, (df['Power'] / df['P_real']) * 100, 0.0)
+    
+    # Selecionar colunas
+    eff_df = df[['P_real', 'Efficiency']].copy()
+    eff_df.columns = ['Potencia DC', 'Eficiencia'] # Renomear para português
+    
+    # Salvar
+    EFF_OUTPUT = "analise_eficiencia.csv"
+    eff_df.to_csv(EFF_OUTPUT) # Mantém o index (datetime) para referência
+    print(f"Arquivo salvo: {os.path.abspath(EFF_OUTPUT)}")
 
 if __name__ == "__main__":
     run_analysis()
