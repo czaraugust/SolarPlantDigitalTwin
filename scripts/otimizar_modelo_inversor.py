@@ -16,23 +16,25 @@ Modelos testados:
 7. Eficiência com temperatura: Eff = f(P_dc, Temp)
 """
 
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import numpy as np
-import os
-import sys
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from core.inverter_model import InverterModel
+from core.config import DATASET_16D_PATH, RESULTS_DIR
 
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CSV_PATH = DATASET_16D_PATH
 MIN_POWER = 10.0
 
 
-def efficiency_baseline(p_dc):
-    """Fórmula de eficiência atual (R²=0.905)"""
-    return 96.8016 - (9653.1352 / p_dc) - (0.000125 * p_dc)
+
 
 
 def calc_metrics(y_pred, y_real, min_power=10.0):
@@ -98,9 +100,10 @@ def run():
     # BASELINE
     # =====================
     print("=" * 65)
-    print("BASELINE: Eff = 96.8016 - 9653.1352/Pdc - 0.000125*Pdc")
+    print("BASELINE: InverterModel.calculate_efficiency")
     print("=" * 65)
-    eff_base = np.clip(efficiency_baseline(p_dc), 0, 100)
+    inversor = InverterModel()
+    eff_base = inversor.calculate_efficiency(p_dc)
     p_ac_base = p_dc * (eff_base / 100.0)
     base_m = calc_metrics(p_ac_base, p_ac_real)
     print_metrics("Baseline", base_m)
@@ -251,8 +254,9 @@ def run():
     results_df['M5_Poly2'] = y_m5
     results_df['M7_EffRefit'] = y_m7
     results_df['M8_EffTemp'] = y_m8
-    results_df.to_csv("resultado_otimizacao_inversor.csv")
-    print(f"\nCSV salvo: {os.path.abspath('resultado_otimizacao_inversor.csv')}")
+    OUTPUT_FILE = os.path.join(RESULTS_DIR, "resultado_otimizacao_inversor.csv")
+    results_df.to_csv(OUTPUT_FILE)
+    print(f"\nCSV salvo: {os.path.abspath(OUTPUT_FILE)}")
 
 
 if __name__ == "__main__":

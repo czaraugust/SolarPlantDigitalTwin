@@ -1,15 +1,20 @@
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import numpy as np
 import pvlib
 import datetime
-import os
-import sys
 from scipy.optimize import minimize, Bounds
 from pvlib import pvsystem, singlediode
 
+from core.config import DATASET_16D_PATH, RESULTS_DIR
+
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
-OUTPUT_FILE = "calibration_results.txt"
+CSV_PATH = DATASET_16D_PATH
+OUTPUT_FILE = os.path.join(RESULTS_DIR, "calibration_results.txt")
 
 # Localização
 LATITUDE = -9.55762188835476

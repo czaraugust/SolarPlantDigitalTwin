@@ -4,7 +4,7 @@ import traceback
 import matplotlib.dates as mdates
 
 from core.pv_module_model import PVSystemModel
-from core.inverter_state_machine import InverterStateMachine
+from core.inverter_model import InverterModel
 
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -37,7 +37,7 @@ class PaginaInversorSimulado(ttk.Frame):
         }
 
         # Máquina de estados do inversor
-        self.state_machine = InverterStateMachine(v_partida=120.0)
+        self.state_machine = InverterModel(v_partida=120.0)
         self.str_estado = tk.StringVar(value="DESLIGADO")
 
         # Variáveis de exibição numérica
@@ -339,8 +339,8 @@ class PaginaInversorSimulado(ttk.Frame):
             # --- Eficiência e Conversão DC -> AC ---
             p_ac_sim = 0.0
             eff = 0.0
-            if estado == InverterStateMachine.LIGADO and p_dc > 50:
-                eff = 96.8016 - (9653.1352 / p_dc) - (0.000125 * p_dc)
+            if estado == InverterModel.LIGADO and p_dc > 50:
+                eff = self.state_machine.calculate_efficiency(p_dc)
                 if eff > 0:
                     p_ac_sim = p_dc * (eff / 100.0)
                 else:
@@ -369,7 +369,7 @@ class PaginaInversorSimulado(ttk.Frame):
             # Cor do label de estado
             if hasattr(self, '_estado_label'):
                 self._estado_label.configure(
-                    foreground='green' if estado == InverterStateMachine.LIGADO else 'red')
+                    foreground='green' if estado == InverterModel.LIGADO else 'red')
 
 
             # --- Histórico ---

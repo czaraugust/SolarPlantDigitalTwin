@@ -11,19 +11,21 @@ Fluxo:
 6. Calcula métricas: MSE, MAE, RMSE, MAPE, WAPE
 """
 
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import numpy as np
 import pvlib
-import os
-import sys
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from core.solar_calculator import CalculadoraSolar
 from core.irradiance_calculator import calcular_componentes_irradiancia
+from core.config import DATASET_16D_PATH, RESULTS_DIR
 
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CSV_PATH = DATASET_16D_PATH
 
 LATITUDE = -9.55762188835476
 LONGITUDE = -35.78094625196216
@@ -188,7 +190,7 @@ def run_analysis():
     # Salvar CSV
     output_df = valid[['P_dc_prev', 'P_dc_real']].copy()
     output_df['Erro'] = errors
-    OUTPUT_FILE = "resultado_previsao_dc.csv"
+    OUTPUT_FILE = os.path.join(RESULTS_DIR, "resultado_previsao_dc.csv")
     output_df.to_csv(OUTPUT_FILE)
     print(f"\nCSV salvo em: {os.path.abspath(OUTPUT_FILE)}")
 

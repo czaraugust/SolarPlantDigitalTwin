@@ -8,6 +8,7 @@ import traceback
 from core.solar_calculator import CalculadoraSolar
 from core.csv_player import CsvPlayer  # <-- Importação do Player
 from core.solar_analyst import SolarAnalyst # <-- Importação do Analista IA
+from core.config import DATASET_16D_PATH
 
 # Importa as classes das PÁGINAS DA INTERFACE
 from gui.pages.page_seguidor import PaginaGrafico
@@ -24,7 +25,7 @@ from gui.pages.page_inversor_simulado import PaginaInversorSimulado # <--- Impor
 
 # --- CONFIGURAÇÃO DE SIMULAÇÃO ---
 USA_DADOS_CSV = True  # Altere para True para usar dados do CSV
-CAMINHO_ARQUIVO_CSV = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CAMINHO_ARQUIVO_CSV = DATASET_16D_PATH
 
 
 class SolarApp(tk.Tk):

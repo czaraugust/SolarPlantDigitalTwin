@@ -15,14 +15,22 @@ import pvlib
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pandas as pd
+import numpy as np
+import pvlib
 
 from core.solar_calculator import CalculadoraSolar
 from core.irradiance_calculator import calcular_componentes_irradiancia
-from core.inverter_state_machine import InverterStateMachine
+from core.inverter_model import InverterModel
+from core.config import DATASET_16D_PATH, RESULTS_DIR
 
 # --- CONFIGURACAO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CSV_PATH = DATASET_16D_PATH
 
 LATITUDE = -9.55762188835476
 LONGITUDE = -35.78094625196216
@@ -56,8 +64,7 @@ M4 = {'a': 6.263008, 'b': -30.290082, 'c': -1.811529, 'd': 0.117656, 'e': 72.747
 CENARIOS = [i / 100.0 for i in range(0, 105, 5)]  # 0.00, 0.05, ..., 1.00
 
 
-def efficiency_formula(p_dc):
-    return 96.8016 - (9653.1352 / p_dc) - (0.000125 * p_dc)
+
 
 
 def simular_cenario(p_dc_base, v_s1, v_s2, fator, p_nominal):
@@ -65,13 +72,13 @@ def simular_cenario(p_dc_base, v_s1, v_s2, fator, p_nominal):
     p_dc = p_dc_base * (1.0 + fator)
     n = len(p_dc)
 
-    sm = InverterStateMachine(v_partida=V_PARTIDA)
+    sm = InverterModel(v_partida=V_PARTIDA)
     p_ac_preclip = np.zeros(n)
 
     for i in range(n):
-        estado = sm.step(v_s1[i], v_s2[i], p_dc[i])
-        if estado == InverterStateMachine.LIGADO and p_dc[i] > 50:
-            eff = efficiency_formula(p_dc[i])
+        estado, _ = sm.step(v_s1[i], v_s2[i], p_dc[i])
+        if estado == InverterModel.LIGADO and p_dc[i] > 50:
+            eff = sm.calculate_efficiency(p_dc[i])
             if eff > 0:
                 p_ac_preclip[i] = p_dc[i] * (eff / 100.0)
 
@@ -216,7 +223,7 @@ def run():
     df_result = pd.DataFrame(resultados)
     df_result['ganho_pct'] = ((df_result['energy_entregue'] - base_entregue) / base_entregue * 100)
     df_result['aumento_pct'] = df_result['fator'] * 100
-    OUTPUT = "resultado_cenarios_oversizing.csv"
+    OUTPUT = os.path.join(RESULTS_DIR, "resultado_cenarios_oversizing.csv")
     df_result.to_csv(OUTPUT, index=False)
     print(f"\nCSV salvo: {os.path.abspath(OUTPUT)}")
 

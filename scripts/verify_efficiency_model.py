@@ -1,8 +1,15 @@
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import numpy as np
-import os
 
-INPUT_FILE = "analise_eficiencia_limpo.csv"
+from core.inverter_model import InverterModel
+from core.config import RESULTS_DIR
+
+INPUT_FILE = os.path.join(RESULTS_DIR, "analise_eficiencia_limpo.csv")
 
 def calculate_metrics():
     if not os.path.exists(INPUT_FILE):
@@ -28,7 +35,8 @@ def calculate_metrics():
     # Vamos filtrar P_dc muito baixo para evitar explosão da fórmula, ou assumir que o dataset limpo é seguro.
     # O dataset limpo tem Eficiencia > 0, o que implica P_ac > 0 e P_dc > 0.
     
-    Eff_est = 96.8016 - (9653.1352 / P_dc) - (0.000125 * P_dc)
+    inversor = InverterModel()
+    Eff_est = inversor.calculate_efficiency(P_dc.values)
     
     # A eficiência estimada não deve ser usada se P_dc for muito baixo (o termo 1/P_dc explode).
     # O modelo provavelmente é válido para P_dc observados.
@@ -53,7 +61,7 @@ def calculate_metrics():
     wape = (errors.abs().sum() / P_ac_real.sum()) * 100
     
     print("\n--- Resultados da Validação do Modelo de Eficiência ---")
-    print(f"Fórmula: Eff = 96.8016 - (9653.1352 / P_dc) - (0.000125 * P_dc)")
+    print(f"Fórmula: InverterModel.calculate_efficiency")
     print("-" * 30)
     print(f"MSE:  {mse:.4f}")
     print(f"RMSE: {rmse:.4f} W")
@@ -71,8 +79,9 @@ def calculate_metrics():
         'P_ac_est': P_ac_est,
         'Error': errors
     })
-    output_df.to_csv("validacao_modelo_eficiencia.csv", index=False)
-    print("CSV comparativo salvo em: validacao_modelo_eficiencia.csv")
+    OUTPUT_FILE = os.path.join(RESULTS_DIR, "validacao_modelo_eficiencia.csv")
+    output_df.to_csv(OUTPUT_FILE, index=False)
+    print(f"CSV comparativo salvo em: {os.path.abspath(OUTPUT_FILE)}")
 
 if __name__ == "__main__":
     calculate_metrics()

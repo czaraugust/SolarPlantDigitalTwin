@@ -12,18 +12,23 @@ Fluxo:
 7. Calcula métricas: MSE, MAE, RMSE, MAPE, WAPE
 """
 
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import numpy as np
-import os
+
+from core.inverter_model import InverterModel
+from core.config import DATASET_16D_PATH, RESULTS_DIR
 
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CSV_PATH = DATASET_16D_PATH
 MIN_POWER_THRESHOLD = 10.0  # Padronizado com os demais scripts
 
 
-def efficiency_formula(p_dc):
-    """Fórmula de eficiência do inversor (R²=0.905)"""
-    return 96.8016 - (9653.1352 / p_dc) - (0.000125 * p_dc)
+
 
 
 def run_analysis():
@@ -55,9 +60,8 @@ def run_analysis():
     df['P_ac_real'] = df['Power']
 
     # Aplicar fórmula de eficiência sobre P_DC REAL
-    df['Eff'] = np.where(df['P_dc_real'] > 50,
-                         efficiency_formula(df['P_dc_real']), 0.0)
-    df['Eff'] = df['Eff'].clip(lower=0.0)
+    inversor = InverterModel()
+    df['Eff'] = inversor.calculate_efficiency(df['P_dc_real'].values)
 
     df['P_ac_gerada'] = df['P_dc_real'] * (df['Eff'] / 100.0)
 
@@ -93,7 +97,7 @@ def run_analysis():
     # Salvar CSV
     output_df = valid[['P_dc_real', 'Eff', 'P_ac_gerada', 'P_ac_real']].copy()
     output_df['Erro'] = errors
-    OUTPUT_FILE = "resultado_eficiencia_real.csv"
+    OUTPUT_FILE = os.path.join(RESULTS_DIR, "resultado_eficiencia_real.csv")
     output_df.to_csv(OUTPUT_FILE)
     print(f"\nCSV salvo em: {os.path.abspath(OUTPUT_FILE)}")
 

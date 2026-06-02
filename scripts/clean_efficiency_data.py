@@ -1,8 +1,13 @@
-import pandas as pd
+import sys
 import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-INPUT_FILE = "analise_eficiencia.csv"
-OUTPUT_FILE = "analise_eficiencia_limpo.csv"
+import pandas as pd
+from core.config import RESULTS_DIR
+
+INPUT_FILE = os.path.join(RESULTS_DIR, "analise_eficiencia.csv")
+OUTPUT_FILE = os.path.join(RESULTS_DIR, "analise_eficiencia_limpo.csv")
 
 def clean_data():
     if not os.path.exists(INPUT_FILE):

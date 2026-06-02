@@ -18,3 +18,8 @@ pip-wheel-metadata/
 dist/
 build/
 *.egg-info/
+
+# Data and simulation outputs
+data/
+results/
+plots/

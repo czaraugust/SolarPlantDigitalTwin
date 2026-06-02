@@ -11,23 +11,25 @@ Abordagens testadas:
 5. Regressão polinomial completa
 """
 
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pandas as pd
 import numpy as np
 import pvlib
-import os
-import sys
 from scipy.optimize import minimize
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 from core.solar_calculator import CalculadoraSolar
 from core.irradiance_calculator import calcular_componentes_irradiancia
+from core.config import DATASET_16D_PATH, RESULTS_DIR
 
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CSV_PATH = DATASET_16D_PATH
 
 LATITUDE = -9.55762188835476
 LONGITUDE = -35.78094625196216
@@ -278,8 +280,9 @@ def run():
     results_df['M2_Linear'] = y_m2
     results_df['M5_Poly2'] = y_m5
     results_df['M6_GHI'] = y_m6
-    results_df.to_csv("resultado_otimizacao_dc.csv")
-    print(f"\nCSV salvo: {os.path.abspath('resultado_otimizacao_dc.csv')}")
+    OUTPUT_FILE = os.path.join(RESULTS_DIR, "resultado_otimizacao_dc.csv")
+    results_df.to_csv(OUTPUT_FILE)
+    print(f"\nCSV salvo: {os.path.abspath(OUTPUT_FILE)}")
 
     # Melhor modelo
     best = min(all_models, key=lambda x: x[1]['RMSE'])

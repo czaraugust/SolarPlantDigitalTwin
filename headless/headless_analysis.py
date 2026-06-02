@@ -5,17 +5,21 @@ import datetime
 import os
 import sys
 
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Custom Calculators
 from core.solar_calculator import CalculadoraSolar
 from core.irradiance_calculator import calcular_componentes_irradiancia
 
+from core.config import DATASET_16D_PATH, RESULTS_DIR
+
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
-OUTPUT_DAILY = "metricas_diarias.csv"
-OUTPUT_TOTAL = "metricas_totais.csv"
+CSV_PATH = DATASET_16D_PATH
+OUTPUT_DAILY = os.path.join(RESULTS_DIR, "metricas_diarias.csv")
+OUTPUT_TOTAL = os.path.join(RESULTS_DIR, "metricas_totais.csv")
 
 # Localização
 LATITUDE = -9.55762188835476
@@ -332,7 +336,7 @@ def run_analysis():
     eff_df.columns = ['Potencia DC', 'Eficiencia'] # Renomear para português
     
     # Salvar
-    EFF_OUTPUT = "analise_eficiencia.csv"
+    EFF_OUTPUT = os.path.join(RESULTS_DIR, "analise_eficiencia.csv")
     eff_df.to_csv(EFF_OUTPUT) # Mantém o index (datetime) para referência
     print(f"Arquivo salvo: {os.path.abspath(EFF_OUTPUT)}")
 

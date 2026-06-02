@@ -19,15 +19,21 @@ import numpy as np
 import pvlib
 import os
 import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import pandas as pd
+import numpy as np
+import pvlib
 
 from core.solar_calculator import CalculadoraSolar
 from core.irradiance_calculator import calcular_componentes_irradiancia
-from core.inverter_state_machine import InverterStateMachine
+from core.inverter_model import InverterModel
+from core.config import DATASET_16D_PATH, RESULTS_DIR
 
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CSV_PATH = DATASET_16D_PATH
 
 LATITUDE = -9.55762188835476
 LONGITUDE = -35.78094625196216
@@ -59,9 +65,7 @@ V_PARTIDA = 120.0     # V
 M4 = {'a': 6.263008, 'b': -30.290082, 'c': -1.811529, 'd': 0.117656, 'e': 72.7470}
 
 
-def efficiency_formula(p_dc):
-    """Eficiência do inversor."""
-    return 96.8016 - (9653.1352 / p_dc) - (0.000125 * p_dc)
+
 
 
 def run():
@@ -152,7 +156,7 @@ def run():
 
     # --- MAQUINA DE ESTADOS ---
     print("Aplicando maquina de estados...")
-    sm = InverterStateMachine(v_partida=V_PARTIDA)
+    sm = InverterModel(v_partida=V_PARTIDA)
 
     v_s1 = df['Voltage S1'].values
     v_s2 = df['Voltage S2'].values
@@ -162,11 +166,11 @@ def run():
     p_ac_sim_arr = np.zeros(len(df))
 
     for i in range(len(df)):
-        estado = sm.step(v_s1[i], v_s2[i], p_dc_sim[i])
+        estado, _ = sm.step(v_s1[i], v_s2[i], p_dc_sim[i])
         estados.append(estado)
 
-        if estado == InverterStateMachine.LIGADO and p_dc_sim[i] > 50:
-            eff = efficiency_formula(p_dc_sim[i])
+        if estado == InverterModel.LIGADO and p_dc_sim[i] > 50:
+            eff = sm.calculate_efficiency(p_dc_sim[i])
             if eff > 0:
                 p_ac_sim_arr[i] = p_dc_sim[i] * (eff / 100.0)
 
@@ -247,7 +251,7 @@ def run():
     output_df = df[['P_dc_real', 'P_dc_sim', 'P_ac_real', 'P_ac_real_clipped',
                      'P_ac_sim_preclip', 'P_ac_sim', 'Clip_real', 'Clip_sim',
                      'Estado']].copy()
-    OUTPUT_FILE = "resultado_energia_clipping.csv"
+    OUTPUT_FILE = os.path.join(RESULTS_DIR, "resultado_energia_clipping.csv")
     output_df.to_csv(OUTPUT_FILE)
     print(f"\nCSV salvo: {os.path.abspath(OUTPUT_FILE)}")
 

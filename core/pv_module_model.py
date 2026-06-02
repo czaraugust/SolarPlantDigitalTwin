@@ -1,6 +1,7 @@
 import pvlib
 import pandas as pd
 import numpy as np
+from core.config import M4_COEFS
 
 
 class PVSystemModel:
@@ -9,15 +10,8 @@ class PVSystemModel:
     com strings em série e paralelo, usando a biblioteca pvlib.
     """
 
-    # Coeficientes de correção M4 (ajustados por regressão no dataset real)
-    # P_corr = a*P_pred + b*POA + c*Temp + d*POA*Temp + e
-    M4_COEFS = {
-        'a': 6.263008,
-        'b': -30.290082,
-        'c': -1.811529,
-        'd': 0.117656,
-        'e': 72.7470
-    }
+    # Coeficientes de correção M4 calibrados importados do core/config.py
+    M4_COEFS = M4_COEFS
 
     def __init__(self, datasheet_params, modules_per_string, strings_in_parallel):
         """
@@ -37,11 +31,31 @@ class PVSystemModel:
     def _calculate_stc_parameters(self):
         """
         Ajusta os parâmetros do modelo de diodo único para STC usando os dados do datasheet.
+        Se os parâmetros calibrados de 1 ano do config.py estiverem disponíveis e o datasheet
+        corresponder ao painel Jinko padrão, utiliza os parâmetros calibrados.
         """
+        is_standard_jinko = (
+            self.datasheet.get('v_mp') == 31.7 and 
+            self.datasheet.get('i_mp') == 8.52 and 
+            self.datasheet.get('v_oc') == 38.8 and 
+            self.datasheet.get('i_sc') == 9.09
+        )
+        
+        if is_standard_jinko:
+            try:
+                from core.config import SDM_CALIBRADO_1ANO
+                return {
+                    'I_L_ref': SDM_CALIBRADO_1ANO['I_L_ref'],
+                    'I_0_ref': SDM_CALIBRADO_1ANO['I_o_ref'],
+                    'R_s': SDM_CALIBRADO_1ANO['R_s'],
+                    'R_sh_ref': SDM_CALIBRADO_1ANO['R_sh_ref'],
+                    'a_ref': SDM_CALIBRADO_1ANO['a_ref']
+                }
+            except (ImportError, KeyError):
+                pass
 
-    
         I_L_ref, I_0_ref, R_s, R_sh, a_ref, Adjust = pvlib.ivtools.sdm.fit_cec_sam(
-            celltype=self.datasheet['cell_type'],
+            celltype=self.datasheet.get('cell_type', 'polySi') if 'cell_type' in self.datasheet else self.datasheet.get('celltype', 'polySi'),
             v_mp=self.datasheet['v_mp'],
             i_mp=self.datasheet['i_mp'],
             v_oc=self.datasheet['v_oc'],

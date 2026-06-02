@@ -18,14 +18,22 @@ import pvlib
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import sys
+import os
+# Adiciona a raiz do projeto ao Python path de busca de módulos
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pandas as pd
+import numpy as np
+import pvlib
 
 from core.solar_calculator import CalculadoraSolar
 from core.irradiance_calculator import calcular_componentes_irradiancia
-from core.inverter_state_machine import InverterStateMachine
+from core.inverter_model import InverterModel
+from core.config import DATASET_16D_PATH, RESULTS_DIR, INVERTER_CONFIG
 
 # --- CONFIGURAÇÃO ---
-CSV_PATH = r"C:\Users\55829\Downloads\PESSOAIS\MESTRADO\PESQUISA\PROJETO_GEMEO_DIGITAL_SOLAR\DATASET_MESTRE_COMPLETO.csv"
+CSV_PATH = DATASET_16D_PATH
 
 # Localização
 LATITUDE = -9.55762188835476
@@ -57,9 +65,7 @@ ALBEDO = 0.2
 V_PARTIDA = 120.0  # V - tensão de partida
 
 
-def efficiency_formula(p_dc):
-    """Fórmula de eficiência do inversor (ajustada com R²=0.905)"""
-    return 96.8016 - (9653.1352 / p_dc) - (0.000125 * p_dc)
+
 
 
 def run_analysis():
@@ -174,7 +180,7 @@ def run_analysis():
 
     # --- MÁQUINA DE ESTADOS ---
     print("Aplicando máquina de estados do inversor...")
-    sm = InverterStateMachine(v_partida=V_PARTIDA)
+    sm = InverterModel(v_partida=V_PARTIDA)
 
     v_s1_arr = df['Voltage S1'].values
     v_s2_arr = df['Voltage S2'].values
@@ -184,17 +190,12 @@ def run_analysis():
     p_ac_sim_arr = np.zeros(len(df))
 
     for i in range(len(df)):
-        estado = sm.step(v_s1_arr[i], v_s2_arr[i], p_dc_arr[i])
+        estado, p_ac_sim = sm.step(v_s1_arr[i], v_s2_arr[i], p_dc_arr[i])
         estado_arr.append(estado)
-
-        if estado == InverterStateMachine.LIGADO and p_dc_arr[i] > 50:
-            eff = efficiency_formula(p_dc_arr[i])
-            if eff > 0:
-                p_ac_sim_arr[i] = p_dc_arr[i] * (eff / 100.0)
+        p_ac_sim_arr[i] = p_ac_sim
 
     df['Estado'] = estado_arr
-    df['Eff'] = np.where(df['P_dc'] > 50, efficiency_formula(df['P_dc']), 0.0)
-    df['Eff'] = df['Eff'].clip(lower=0.0)
+    df['Eff'] = sm.calculate_efficiency(df['P_dc'].values)
     df['P_ac_sim'] = p_ac_sim_arr
 
     # Stats de estado
@@ -223,7 +224,7 @@ def run_analysis():
     print(f"  Configuração: String 1 = {S1_SERIES}s, String 2 = {S2_SERIES}s")
     print(f"  Total Módulos: {TOTAL_MODULES}")
     print(f"  Fórmula Eff: 96.8016 - 9653.1352/Pdc - 0.000125*Pdc")
-    print(f"  V_PARTIDA: {V_PARTIDA} V | P_STANDBY: {InverterStateMachine.P_STANDBY} W | ATRASO: {InverterStateMachine.TEMPO_ATRASO} min")
+    print(f"  V_PARTIDA: {V_PARTIDA} V | P_STANDBY: {INVERTER_CONFIG['p_standby']} W | ATRASO: {INVERTER_CONFIG['tempo_atraso']} min")
     print(f"  Estado: LIGADO={n_ligado}min DESLIGADO={n_desligado}min")
     print("-" * 50)
     print(f"  MSE:  {mse:.4f} W²")
@@ -236,7 +237,7 @@ def run_analysis():
     # Salvar CSV comparativo
     output_df = valid[['P_dc', 'Eff', 'P_ac_sim', 'P_ac_real', 'Estado']].copy()
     output_df['Erro'] = errors
-    OUTPUT_FILE = "resultado_inversor_simulado.csv"
+    OUTPUT_FILE = os.path.join(RESULTS_DIR, "resultado_inversor_simulado.csv")
     output_df.to_csv(OUTPUT_FILE)
     print(f"\nCSV comparativo salvo em: {os.path.abspath(OUTPUT_FILE)}")
 
